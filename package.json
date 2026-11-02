@@ -1,0 +1,15 @@
+{
+  "name": "weekplanner",
+  "private": true,
+  "type": "module",
+  "description": "Avondeten en boodschappen plannen met z'n tweeën. Zie README.md.",
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "test": "npm --prefix web run test && npm run test:sql && npm --prefix picnic-server run test",
+    "test:sql": "node supabase/tests/migrations.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0"
+  }
+}

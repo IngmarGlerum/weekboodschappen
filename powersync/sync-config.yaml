@@ -1,0 +1,56 @@
+# PowerSync Sync Streams voor de Weekplanner.
+#
+# Plak dit in het PowerSync-dashboard (Sync Streams) en deploy het.
+#
+# Elke gebruiker krijgt alleen de rijen van zijn eigen huishouden. De filter
+# loopt via household_members, net als de toegangsregels (RLS) in Supabase.
+# Alle streams hebben auto_subscribe, dus de app krijgt alles zodra hij verbindt
+# en kan daarna offline werken (requirement 9).
+
+config:
+  edition: 3
+
+streams:
+  households:
+    auto_subscribe: true
+    query: SELECT * FROM households WHERE id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  ingredients:
+    auto_subscribe: true
+    query: SELECT * FROM ingredients WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  dishes:
+    auto_subscribe: true
+    query: SELECT * FROM dishes WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  dish_ingredients:
+    auto_subscribe: true
+    query: SELECT * FROM dish_ingredients WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  week_days:
+    auto_subscribe: true
+    query: SELECT * FROM week_days WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  general_items:
+    auto_subscribe: true
+    query: SELECT * FROM general_items WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  store_items:
+    auto_subscribe: true
+    query: SELECT * FROM store_items WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  list_states:
+    auto_subscribe: true
+    query: SELECT * FROM list_states WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  weekmenus:
+    auto_subscribe: true
+    query: SELECT * FROM weekmenus WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  weekmenu_days:
+    auto_subscribe: true
+    query: SELECT * FROM weekmenu_days WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  weekmenu_store_items:
+    auto_subscribe: true
+    query: SELECT * FROM weekmenu_store_items WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())

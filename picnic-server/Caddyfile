@@ -1,0 +1,4 @@
+# Caddy haalt zelf een HTTPS-certificaat op voor het domein dat naar de VM wijst.
+{$DOMAIN} {
+	reverse_proxy picnic:8787
+}

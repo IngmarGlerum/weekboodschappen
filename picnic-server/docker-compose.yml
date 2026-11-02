@@ -1,0 +1,33 @@
+# Draait op de Google Cloud VM: de Picnic-server met Caddy ervoor voor HTTPS.
+# Gebruik:  cp .env.example .env  (invullen)  en  DOMAIN=picnic.jouwdomein.nl docker compose up -d --build
+services:
+  picnic:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - picnic-data:/data
+    expose:
+      - "8787"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - picnic
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Zet DOMAIN, bijvoorbeeld picnic.jouwdomein.nl}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  picnic-data:
+  caddy-data:
+  caddy-config:
