@@ -39,9 +39,11 @@ Een telefoonklok die vooruit loopt wordt teruggezet naar nu, zodat één telefoo
 2. Voer de bestanden in `supabase/migrations/` uit, op volgorde van naam (SQL-editor, of met de Supabase CLI):
    eerst `20261102090000_init.sql`, dan `20261104090000_planningen.sql`.
 3. Voer daarna `supabase/powersync_setup.sql` uit. **Vervang eerst het wachtwoord** in dat bestand.
-4. Inloggen gaat met een code uit de e-mail (zonder wachtwoord). Pas in *Authentication > Email Templates*
-   de sjablonen **Magic Link** én **Confirm signup** aan zodat de e-mail `{{ .Token }}` bevat, bijvoorbeeld:
-   `Je code is {{ .Token }}`. Zonder dat krijg je alleen een link en geen code.
+4. Inloggen gaat met e-mailadres en wachtwoord. Een nieuw account en *wachtwoord vergeten* gaan met een
+   code uit de e-mail: zo is het adres één keer geverifieerd, daarna kies je een wachtwoord en blijf je
+   ingelogd. Pas in *Authentication > Emails* de sjablonen **Magic Link** én **Confirm signup** aan zodat de
+   e-mail `{{ .Token }}` bevat, bijvoorbeeld: `Je code is {{ .Token }}`. Zonder dat krijg je alleen een link.
+   Een account dat nog geen wachtwoord heeft (van vóór deze versie) krijgt één keer de vraag er een te kiezen.
 5. De ingebouwde mailservice van Supabase is zwaar beperkt. Stel voor dagelijks gebruik een eigen
    SMTP-provider in (*Authentication > SMTP*).
 
@@ -91,7 +93,7 @@ winkellijst en weekmenu's; herladen, offline openen, manifest en service worker)
 
 **Niet getest, omdat het jullie accounts vraagt of hier niet kan:**
 
-- Tegen een live **Supabase** en **PowerSync**: inloggen met e-mailcode, de upload-connector, en het
+- Tegen een live **Supabase** en **PowerSync**: inloggen met wachtwoord en e-mailcode, de upload-connector, en het
   daadwerkelijk synchroniseren tussen twee apparaten, ook na offline wijzigen. Dit is het eerste wat je
   na het opzetten met twee telefoons moet proberen.
 - De schermen **inloggen, uitnodiging en huishouden** (die bestaan alleen online): die zijn gebouwd en

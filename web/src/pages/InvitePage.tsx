@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { useHousehold } from '../auth/HouseholdProvider'
 import { describeError } from '../lib/errors'
 import { LoginForm } from './LoginForm'
+import SetPasswordPage from './SetPasswordPage'
 
 /**
  * De pagina achter de uitnodigingslink (requirement 10). De link zelf geeft
@@ -14,12 +15,14 @@ import { LoginForm } from './LoginForm'
 export default function InvitePage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
-  const { mode, user, loading: authLoading } = useAuth()
+  const { mode, user, loading: authLoading, needsPassword } = useAuth()
   const { loading: householdLoading, acceptInvitation } = useHousehold()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (mode === 'local') return <Navigate to="/" replace />
+  // Nieuw account via de uitnodiging: eerst een wachtwoord kiezen, dan meedoen.
+  if (user && needsPassword) return <SetPasswordPage />
 
   async function accept() {
     setBusy(true)
@@ -41,7 +44,7 @@ export default function InvitePage() {
     content = (
       <LoginForm
         title="Je bent uitgenodigd"
-        intro="Log in met het e-mailadres waarop je de uitnodiging kreeg. Dat adres wordt gecontroleerd."
+        intro="Log in, of maak een account, met het e-mailadres waarop je de uitnodiging kreeg. Dat adres wordt gecontroleerd."
       />
     )
   } else {

@@ -9,6 +9,7 @@ import HouseholdPage from './pages/HouseholdPage'
 import IngredientsPage from './pages/IngredientsPage'
 import InvitePage from './pages/InvitePage'
 import LoginPage from './pages/LoginPage'
+import SetPasswordPage from './pages/SetPasswordPage'
 import MorePage from './pages/MorePage'
 import ShoppingPage from './pages/ShoppingPage'
 import StartPage from './pages/StartPage'
@@ -27,10 +28,11 @@ function Loading() {
 
 /** Online moet je ingelogd zijn; in lokale modus (zonder Supabase) niet. */
 function RequireAuth() {
-  const { mode, loading, user } = useAuth()
+  const { mode, loading, user, needsPassword } = useAuth()
   if (mode === 'local') return <Outlet />
   if (loading) return <Loading />
   if (!user) return <LoginPage />
+  if (needsPassword) return <SetPasswordPage />
   return <Outlet />
 }
 

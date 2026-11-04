@@ -9,7 +9,7 @@ export default function LoginPage() {
           <Heading size="2xl">Weekplanner</Heading>
           <Text color="fg.muted">Avondeten en boodschappen, samen gepland.</Text>
         </Box>
-        <LoginForm intro="Vul je e-mailadres in. Je krijgt een code om in te loggen." />
+        <LoginForm intro="Log in met je e-mailadres en wachtwoord." />
       </Stack>
     </Box>
   )
