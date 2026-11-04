@@ -1,10 +1,13 @@
-import { Badge, Box, Button, Flex, HStack, Heading, Text } from '@chakra-ui/react'
+import { Badge, Box, Button, Flex, HStack, Heading, IconButton, Text } from '@chakra-ui/react'
 import { useStatus } from '@powersync/react'
 import { createContext, useContext, useMemo, useState } from 'react'
-import { LuCalendarDays, LuEllipsis, LuShoppingCart, LuStore, LuUtensils } from 'react-icons/lu'
+import { LuCalendarDays, LuEllipsis, LuMenu, LuShoppingCart, LuStore, LuUtensils } from 'react-icons/lu'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { useCurrentHousehold } from '../auth/HouseholdProvider'
 import { startOfWeek, todayISO } from '../domain/dates'
+import { HouseholdAvatar } from './HouseholdAvatar'
+import { SettingsDrawer } from './SettingsDrawer'
 
 interface WeekContextValue {
   /** Maandag van de week waar de gebruiker mee bezig is; gedeeld door Week en Boodschappen. */
@@ -38,7 +41,7 @@ const NAV = [
     to: '/meer',
     label: 'Meer',
     icon: LuEllipsis,
-    match: (p: string) => ['/meer', '/ingredienten', '/weekmenus', '/huishouden'].some((x) => p.startsWith(x)),
+    match: (p: string) => ['/meer', '/ingredienten', '/weekmenus', '/planning'].some((x) => p.startsWith(x)),
   },
 ]
 
@@ -47,6 +50,8 @@ export default function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const weekValue = useMemo(() => ({ weekStart, setWeekStart }), [weekStart])
+  const household = useCurrentHousehold()
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
     <WeekContext.Provider value={weekValue}>
@@ -62,11 +67,32 @@ export default function AppShell() {
           py="3"
           justify="space-between"
           align="center"
+          gap="2"
           pt="max(12px, env(safe-area-inset-top))"
         >
-          <Heading size="md">Weekplanner</Heading>
-          <SyncBadge />
+          <HStack gap="1" minW="0" flex="1">
+            <IconButton variant="ghost" aria-label="Instellingen openen" onClick={() => setDrawerOpen(true)}>
+              <LuMenu />
+            </IconButton>
+            <Button
+              variant="plain"
+              px="1"
+              gap="2"
+              minW="0"
+              aria-label={`Planning: ${household.name}. Tik om te wisselen.`}
+              onClick={() => setDrawerOpen(true)}
+            >
+              <HouseholdAvatar household={household} />
+              <Heading size="md" truncate>
+                {household.name}
+              </Heading>
+            </Button>
+          </HStack>
+          <Box flexShrink={0}>
+            <SyncBadge />
+          </Box>
         </Flex>
+        <SettingsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
         <Box as="main" flex="1" w="full" maxW="720px" mx="auto" px="4" pt="4" pb="96px">
           <Outlet />

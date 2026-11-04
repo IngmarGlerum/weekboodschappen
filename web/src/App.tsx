@@ -34,7 +34,7 @@ function RequireAuth() {
   return <Outlet />
 }
 
-/** Alles in de app hoort bij een huishouden. Zonder huishouden ga je naar /start. */
+/** Alles in de app hoort bij een planning. Zonder planning ga je naar /start. */
 function RequireHousehold() {
   const { household, loading, error, refresh } = useHousehold()
   if (loading) return <Loading />
@@ -42,7 +42,7 @@ function RequireHousehold() {
     return (
       <Center minH="100dvh" px="4">
         <Stack gap="3" align="center" textAlign="center">
-          <Text>Het huishouden kon niet geladen worden: {error}</Text>
+          <Text>De planningen konden niet geladen worden: {error}</Text>
           <Button onClick={() => void refresh()}>Opnieuw proberen</Button>
         </Stack>
       </Center>
@@ -69,7 +69,8 @@ export default function App() {
             <Route path="ingredienten" element={<IngredientsPage />} />
             <Route path="weekmenus" element={<WeekmenusPage />} />
             <Route path="weekmenus/:id" element={<WeekmenuEditPage />} />
-            <Route path="huishouden" element={<HouseholdPage />} />
+            <Route path="planning" element={<HouseholdPage />} />
+            <Route path="huishouden" element={<Navigate to="/planning" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Route>

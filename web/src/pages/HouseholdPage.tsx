@@ -1,10 +1,13 @@
 import { Badge, Box, Button, Card, Field, Flex, HStack, Heading, IconButton, Input, Stack, Text } from '@chakra-ui/react'
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { LuArrowLeft, LuCopy, LuMail, LuTrash2 } from 'react-icons/lu'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { LuArrowLeft, LuCamera, LuCopy, LuDoorOpen, LuMail, LuTrash2 } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { useCurrentHousehold } from '../auth/HouseholdProvider'
+import { useCurrentHousehold, useHousehold } from '../auth/HouseholdProvider'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { HouseholdAvatar } from '../components/HouseholdAvatar'
 import { notify } from '../components/toaster'
+import { fileToAvatar } from '../lib/avatar'
 import { describeError } from '../lib/errors'
 import { requireSupabase } from '../lib/supabase'
 
@@ -22,11 +25,17 @@ interface Invitation {
 
 const inviteUrl = (id: string) => `${window.location.origin}/uitnodiging/${id}`
 
-/** Leden en uitnodigingen (requirement 8 en 10). Alleen in online modus. */
+/** Naam, foto, leden en uitnodigingen van de gekozen planning (requirement 8 en 10). Alleen in online modus. */
 export default function HouseholdPage() {
   const navigate = useNavigate()
   const household = useCurrentHousehold()
+  const { households, updateHousehold, leaveHousehold } = useHousehold()
   const { user, signOut } = useAuth()
+  const [name, setName] = useState(household.name)
+  const [savingName, setSavingName] = useState(false)
+  const [savingAvatar, setSavingAvatar] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [email, setEmail] = useState('')
@@ -60,6 +69,65 @@ export default function HouseholdPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Wissel je van planning, of wijzigt de ander de naam, dan volgt het veld.
+  useEffect(() => {
+    setName(household.name)
+  }, [household.id, household.name])
+
+  async function saveName(e: FormEvent) {
+    e.preventDefault()
+    const next = name.trim()
+    if (!next || next === household.name) return
+    setSavingName(true)
+    try {
+      await updateHousehold(household.id, { name: next })
+      notify.success('Naam opgeslagen')
+    } catch (error) {
+      notify.error('Opslaan mislukt', describeError(error))
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  async function pickAvatar(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setSavingAvatar(true)
+    try {
+      await updateHousehold(household.id, { avatar: await fileToAvatar(file) })
+      notify.success('Foto opgeslagen')
+    } catch (error) {
+      notify.error('Foto opslaan mislukt', describeError(error))
+    } finally {
+      setSavingAvatar(false)
+    }
+  }
+
+  async function removeAvatar() {
+    setSavingAvatar(true)
+    try {
+      await updateHousehold(household.id, { avatar: null })
+    } catch (error) {
+      notify.error('Foto weghalen mislukt', describeError(error))
+    } finally {
+      setSavingAvatar(false)
+    }
+  }
+
+  async function leave() {
+    setConfirmLeave(false)
+    try {
+      await leaveHousehold(household.id)
+      notify.success(`Je hebt ${household.name} verlaten`)
+      navigate('/', { replace: true })
+    } catch (error) {
+      notify.error('Verlaten mislukt', describeError(error))
+    }
+  }
+
+  const lastMember = members.length === 1
 
   async function invite(e: FormEvent) {
     e.preventDefault()
@@ -106,20 +174,50 @@ export default function HouseholdPage() {
   return (
     <Stack gap="5">
       <HStack>
-        <IconButton variant="ghost" aria-label="Terug" onClick={() => navigate('/meer')}>
+        <IconButton variant="ghost" aria-label="Terug" onClick={() => navigate(-1)}>
           <LuArrowLeft />
         </IconButton>
-        <Heading size="lg">Huishouden</Heading>
+        <Heading size="lg">Planning</Heading>
       </HStack>
 
-      <Box>
-        <Text fontWeight="semibold">{household.name}</Text>
+      <Stack gap="3">
+        <HStack gap="4" align="center">
+          <HouseholdAvatar household={household} size="2xl" />
+          <Stack gap="2">
+            <input ref={fileInput} type="file" accept="image/*" hidden onChange={pickAvatar} />
+            <Button size="sm" variant="outline" loading={savingAvatar} onClick={() => fileInput.current?.click()}>
+              <LuCamera /> {household.avatar ? 'Andere foto' : 'Kies een foto'}
+            </Button>
+            {household.avatar && (
+              <Button size="sm" variant="ghost" colorPalette="red" disabled={savingAvatar} onClick={removeAvatar}>
+                Foto weghalen
+              </Button>
+            )}
+          </Stack>
+        </HStack>
+        <form onSubmit={saveName}>
+          <Field.Root>
+            <Field.Label>Naam van de planning</Field.Label>
+            <Flex gap="2" w="full">
+              <Input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+              <Button
+                type="submit"
+                colorPalette="green"
+                loading={savingName}
+                disabled={!name.trim() || name.trim() === household.name}
+              >
+                Opslaan
+              </Button>
+            </Flex>
+            <Field.HelperText>Naam en foto zien alle leden bovenaan het scherm.</Field.HelperText>
+          </Field.Root>
+        </form>
         {loadError && (
           <Text color="red.600" role="alert">
             {loadError}
           </Text>
         )}
-      </Box>
+      </Stack>
 
       <Stack gap="2">
         <Heading size="md">Leden</Heading>
@@ -215,9 +313,37 @@ export default function HouseholdPage() {
         </Stack>
       )}
 
-      <Button variant="outline" alignSelf="flex-start" onClick={() => void signOut()}>
-        Uitloggen
-      </Button>
+      <Stack gap="2" pt="2" borderTopWidth="1px">
+        <Button
+          variant="outline"
+          colorPalette="red"
+          alignSelf="flex-start"
+          mt="3"
+          disabled={members.length === 0}
+          onClick={() => setConfirmLeave(true)}
+        >
+          <LuDoorOpen /> Planning verlaten
+        </Button>
+        <Button variant="ghost" alignSelf="flex-start" onClick={() => void signOut()}>
+          Uitloggen
+        </Button>
+      </Stack>
+
+      <ConfirmDialog
+        open={confirmLeave}
+        title={`${household.name} verlaten?`}
+        message={
+          lastMember
+            ? 'Je bent het enige lid. Als je deze planning verlaat, worden de planning en alles erin (gerechten, weken, weekmenu\'s) definitief verwijderd.'
+            : households.length > 1
+              ? 'Je ziet deze planning daarna niet meer. De andere leden kunnen gewoon verder. Je kunt alleen terug met een nieuwe uitnodiging.'
+              : 'Je ziet deze planning daarna niet meer, en je hebt dan geen planning meer. De andere leden kunnen gewoon verder.'
+        }
+        confirmLabel={lastMember ? 'Verlaten en verwijderen' : 'Verlaten'}
+        destructive
+        onConfirm={() => void leave()}
+        onCancel={() => setConfirmLeave(false)}
+      />
     </Stack>
   )
 }

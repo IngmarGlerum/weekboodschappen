@@ -36,7 +36,8 @@ Een telefoonklok die vooruit loopt wordt teruggezet naar nu, zodat één telefoo
 ### 1. Supabase
 
 1. Maak een project aan.
-2. Voer `supabase/migrations/20261102090000_init.sql` uit (SQL-editor, of met de Supabase CLI).
+2. Voer de bestanden in `supabase/migrations/` uit, op volgorde van naam (SQL-editor, of met de Supabase CLI):
+   eerst `20261102090000_init.sql`, dan `20261104090000_planningen.sql`.
 3. Voer daarna `supabase/powersync_setup.sql` uit. **Vervang eerst het wachtwoord** in dat bestand.
 4. Inloggen gaat met een code uit de e-mail (zonder wachtwoord). Pas in *Authentication > Email Templates*
    de sjablonen **Magic Link** én **Confirm signup** aan zodat de e-mail `{{ .Token }}` bevat, bijvoorbeeld:
@@ -64,8 +65,8 @@ staat `web/vercel.json` klaar (alle adressen naar `index.html`). Gebruik nooit d
 
 ### 4. Partner uitnodigen
 
-Eén van jullie logt in en maakt een huishouden aan. Onder *Meer > Huishouden* vul je het e-mailadres van
-je partner in en krijg je een link (kopiëren of openen in je mail-app). De link werkt één keer en 7 dagen,
+Eén van jullie logt in en maakt een planning aan. Via het menu linksboven, *Naam, foto en leden*, vul je het
+e-mailadres van je partner in en krijg je een link (kopiëren of openen in je mail-app). De link werkt één keer en 7 dagen,
 en alleen als je partner inlogt met precies dat e-mailadres. De app verstuurt zelf geen e-mail.
 
 ### 5. Picnic (versie 2)
@@ -105,7 +106,12 @@ winkellijst en weekmenu's; herladen, offline openen, manifest en service worker)
 
 - **Laatste wijziging wint** op tijdstip van wijzigen, niet van aankomen (zie boven).
 - **Algemene boodschappen** staan elke week op de lijst totdat je ze weghaalt of als huisvoorraad markeert.
-- **Eén huishouden per account.**
+- **Meerdere planningen per account.** In de app heet een huishouden een *planning*; in de database blijft het
+  `households`. Je kiest de planning in de zijbalk (menu linksboven); de keuze wordt per apparaat onthouden.
+  Alle planningen waar je lid van bent synchroniseren naar het apparaat, zodat je ook offline kunt wisselen.
+- **Foto per planning** wordt op het apparaat verkleind tot 160 x 160 en als data-URL in `households.avatar`
+  opgeslagen (hooguit 200 kB). Zo synchroniseert hij mee en is hij offline te zien, zonder Supabase Storage.
+- **Planning verlaten**: ben je het laatste lid, dan verdwijnt de planning met alles erin.
 - **Geen unieke database-regel op ingrediëntnamen.** Een mislukte upload zou anders de hele synchronisatie
   blokkeren. Dubbelen worden in de app voorkomen en de lijst voegt ze samen op genormaliseerde naam.
 - **Alles wordt zacht verwijderd** (`deleted_at`). Daardoor kan een verwijderd gerecht grijs in een
