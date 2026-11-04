@@ -11,7 +11,7 @@ export default function MorePage() {
     { to: '/weekmenus', icon: LuBookmark, title: "Weekmenu's", text: 'Opgeslagen weken om opnieuw te gebruiken.' },
     { to: '/ingredienten', icon: LuApple, title: 'Ingrediënten', text: 'Jullie eigen lijst, met huisvoorraad.' },
     ...(mode === 'online'
-      ? [{ to: '/huishouden', icon: LuUsers, title: 'Huishouden', text: 'Leden, uitnodigen en uitloggen.' }]
+      ? [{ to: '/planning', icon: LuUsers, title: 'Planning', text: 'Naam, foto, leden en uitnodigen.' }]
       : []),
   ]
 

@@ -64,8 +64,10 @@ const ago = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString()
 console.log('\nHuishouden')
 const hid = await as(A, async () => (await q(`select public.create_household('Huishouden Henk') as id`)).rows[0].id)
 check('Henk maakt een huishouden', typeof hid === 'string' && hid.length > 10)
-await expectError('Henk kan geen tweede huishouden maken',
-  () => as(A, () => q(`select public.create_household('Nog een')`)), /already_in_household/)
+const hid2 = await as(A, async () => (await q(`select public.create_household('Planning werk') as id`)).rows[0].id)
+check('Henk kan een tweede planning maken', typeof hid2 === 'string' && hid2 !== hid)
+const mine = await as(A, async () => (await q(`select count(*)::int c from public.households`)).rows[0].c)
+check('Henk ziet zijn twee planningen', mine === 2)
 await expectError('zonder login kan niemand een huishouden maken',
   () => as('', () => q(`select public.create_household('x')`)), /not_authenticated/)
 
@@ -168,6 +170,59 @@ await expectError('een vreemde kan geen uitnodiging maken voor andermans huishou
 await expectError('een e-mailadres moet kleine letters zijn',
   () => as(A, () => q(`insert into public.invitations (household_id, email, invited_by) values ($1, 'Vrouw@Example.com', $2)`, [hid, A])),
   /check constraint|violates/)
+
+// --- Meerdere planningen, naam en foto -------------------------------------------------
+console.log('\nMeerdere planningen, naam en foto')
+const avatar = 'data:image/jpeg;base64,' + 'A'.repeat(1000)
+await as(B, () => q(`select public.update_household($1, 'Henk''s weekmenu', $2)`, [hid, avatar]))
+let hh = (await q(`select name, avatar from public.households where id = $1`, [hid])).rows[0]
+check('een lid kan naam en foto van de planning wijzigen', hh.name === "Henk's weekmenu" && hh.avatar === avatar)
+await as(A, () => q(`select public.update_household($1, null, null)`, [hid]))
+hh = (await q(`select name, avatar from public.households where id = $1`, [hid])).rows[0]
+check('zonder waarden blijft alles zoals het was', hh.name === "Henk's weekmenu" && hh.avatar === avatar)
+await as(A, () => q(`select public.update_household($1, null, '')`, [hid]))
+hh = (await q(`select avatar from public.households where id = $1`, [hid])).rows[0]
+check('een lege foto haalt de foto weg', hh.avatar === null)
+await expectError('een vreemde kan de planning niet wijzigen',
+  () => as(C, () => q(`select public.update_household($1, 'gehackt', null)`, [hid])), /not_a_member/)
+await expectError('alleen afbeeldingen als foto',
+  () => as(A, () => q(`select public.update_household($1, null, 'javascript:alert(1)')`, [hid])), /check constraint|violates/)
+await expectError('een te grote foto wordt geweigerd',
+  () => as(A, () => q(`select public.update_household($1, null, $2)`, [hid, 'data:image/png;base64,' + 'A'.repeat(200001)])),
+  /check constraint|violates/)
+await as(A, () => q(`update public.households set name = 'rechtstreeks' where id = $1`, [hid])).catch(() => {})
+hh = (await q(`select name from public.households where id = $1`, [hid])).rows[0]
+check('rechtstreeks de tabel wijzigen kan niet (alleen via de functie)', hh.name === "Henk's weekmenu")
+
+// Een al-lid accepteert een uitnodiging voor dezelfde planning: geen fout.
+const inv2 = await as(A, async () => (await q(
+  `insert into public.invitations (household_id, email, invited_by) values ($1, 'vrouw@example.com', $2) returning id`,
+  [hid, A])).rows[0])
+const again = await as(B, async () => (await q(`select public.accept_invitation($1) as id`, [inv2.id])).rows[0].id)
+check('een uitnodiging voor een planning waar je al bij hoort is geen fout', again === hid)
+
+// Iemand met een eigen planning kan ook een uitnodiging voor een andere accepteren.
+const hidC = await as(C, async () => (await q(`select public.create_household('Eigen planning') as id`)).rows[0].id)
+const inv3 = await as(A, async () => (await q(
+  `insert into public.invitations (household_id, email, invited_by) values ($1, 'ander@example.com', $2) returning id`,
+  [hid2, A])).rows[0])
+await as(C, () => q(`select public.accept_invitation($1)`, [inv3.id]))
+const cCount = await as(C, async () => (await q(`select count(*)::int c from public.households`)).rows[0].c)
+check('met een eigen planning kun je toch een uitnodiging accepteren', cCount === 2)
+
+// Verlaten.
+await as(C, () => q(`select public.leave_household($1)`, [hid2]))
+const cAfter = await as(C, async () => (await q(`select id from public.households`)).rows.map((r) => r.id))
+check('verlaten: de planning is niet meer te zien', cAfter.join() === hidC)
+const stillThere = (await q(`select count(*)::int c from public.households where id = $1`, [hid2])).rows[0].c
+check('verlaten: de planning blijft bestaan voor de andere leden', stillThere === 1)
+await as(C, () => q(`insert into public.dishes (id, household_id, name) values ('dc', $1, 'soep')`, [hidC]))
+await as(C, () => q(`select public.leave_household($1)`, [hidC]))
+const gone = (await q(`select (select count(*) from public.households where id = $1)::int h,
+                              (select count(*) from public.dishes where household_id = $1)::int d`, [hidC])).rows[0]
+check('het laatste lid verlaat: de planning en alles erin verdwijnt', gone.h === 0 && gone.d === 0)
+await expectError('verlaten kan alleen als je lid bent',
+  () => as(C, () => q(`select public.leave_household($1)`, [hid])), /not_a_member/)
 
 // --- Soft delete en weekmenu (requirement 12) ------------------------------------------
 console.log('\nWeekmenu en verwijderd gerecht (requirement 12)')

@@ -1,7 +1,8 @@
 /** Vertaalt foutmeldingen van Supabase en onze database-functies naar begrijpelijk Nederlands. */
 const MESSAGES: Array<[RegExp, string]> = [
   [/not_authenticated/, 'Je bent niet ingelogd.'],
-  [/already_in_household/, 'Dit account hoort al bij een huishouden.'],
+  [/already_in_household/, 'Dit account hoort al bij deze planning.'],
+  [/not_a_member/, 'Je bent geen lid (meer) van deze planning.'],
   [/email_not_verified/, 'Je e-mailadres is nog niet geverifieerd. Log in met de code uit de e-mail.'],
   [/invitation_not_found/, 'Deze uitnodiging bestaat niet (meer).'],
   [/invitation_wrong_email/, 'Deze uitnodiging is voor een ander e-mailadres. Log in met het adres waarop je bent uitgenodigd.'],

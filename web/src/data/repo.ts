@@ -75,7 +75,8 @@ export function createRepo(householdId: string) {
     async addIngredient(input: { name: string; defaultUnit?: string; isPantry?: boolean }): Promise<string> {
       const name = input.name.trim()
       const existing = await db.getAll<{ id: string; name: string }>(
-        `SELECT id, name FROM ingredients WHERE deleted_at IS NULL`,
+        `SELECT id, name FROM ingredients WHERE household_id = ? AND deleted_at IS NULL`,
+        [hid],
       )
       const duplicate = existing.find((i) => normalizeName(i.name) === normalizeName(name))
       if (duplicate) return duplicate.id
@@ -182,7 +183,8 @@ export function createRepo(householdId: string) {
     // --- Algemene boodschappen (requirement 3) --------------------------
     async addGeneralItem(name: string): Promise<string> {
       const existing = await db.getAll<{ id: string; name: string }>(
-        `SELECT id, name FROM general_items WHERE deleted_at IS NULL`,
+        `SELECT id, name FROM general_items WHERE household_id = ? AND deleted_at IS NULL`,
+        [hid],
       )
       const duplicate = existing.find((i) => normalizeName(i.name) === normalizeName(name))
       if (duplicate) return duplicate.id
@@ -250,8 +252,9 @@ export function createRepo(householdId: string) {
     async clearDoneStoreItems() {
       const t = nowISO()
       await db.execute(
-        `UPDATE store_items SET deleted_at = ?, modified_at = ? WHERE done = 1 AND deleted_at IS NULL`,
-        [t, t],
+        `UPDATE store_items SET deleted_at = ?, modified_at = ?
+          WHERE household_id = ? AND done = 1 AND deleted_at IS NULL`,
+        [t, t, hid],
       )
     },
 
@@ -333,7 +336,8 @@ export function createRepo(householdId: string) {
           await upsertWeekDay(tx, day.day, day.dishId, t)
         }
         const open = await tx.getAll<{ label: string }>(
-          `SELECT label FROM store_items WHERE deleted_at IS NULL AND done = 0`,
+          `SELECT label FROM store_items WHERE household_id = ? AND deleted_at IS NULL AND done = 0`,
+          [hid],
         )
         const known = new Set(open.map((r) => normalizeName(r.label)))
         for (const label of input.storeLabels) {
@@ -348,7 +352,7 @@ export function createRepo(householdId: string) {
 
 export type Repo = ReturnType<typeof createRepo>
 
-/** De schrijfacties voor het huidige huishouden. */
+/** De schrijfacties voor de gekozen planning. */
 export function useRepo(): Repo {
   const { id } = useCurrentHousehold()
   return useMemo(() => createRepo(id), [id])

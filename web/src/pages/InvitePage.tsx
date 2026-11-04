@@ -15,7 +15,7 @@ export default function InvitePage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { mode, user, loading: authLoading } = useAuth()
-  const { household, loading: householdLoading, acceptInvitation } = useHousehold()
+  const { loading: householdLoading, acceptInvitation } = useHousehold()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -44,23 +44,11 @@ export default function InvitePage() {
         intro="Log in met het e-mailadres waarop je de uitnodiging kreeg. Dat adres wordt gecontroleerd."
       />
     )
-  } else if (household) {
-    content = (
-      <>
-        <Heading size="xl">Je hoort al bij een huishouden</Heading>
-        <Text color="fg.muted">
-          Een account kan bij één huishouden horen. Deze uitnodiging kun je daarom niet gebruiken met {user.email}.
-        </Text>
-        <Button colorPalette="green" onClick={() => navigate('/', { replace: true })}>
-          Naar de app
-        </Button>
-      </>
-    )
   } else {
     content = (
       <>
         <Heading size="xl">Je bent uitgenodigd</Heading>
-        <Text color="fg.muted">Je bent ingelogd als {user.email}. Wil je meedoen met het huishouden?</Text>
+        <Text color="fg.muted">Je bent ingelogd als {user.email}. Wil je meedoen met deze planning? Je andere planningen blijven gewoon bestaan.</Text>
         {error && (
           <Text color="red.600" role="alert">
             {error}

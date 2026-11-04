@@ -14,5 +14,5 @@ export const env = {
   isConfigured: Boolean(supabaseUrl && supabaseKey && powersyncUrl),
 }
 
-/** Het huishouden-id in lokale modus. */
+/** Het id van de planning in lokale modus. */
 export const LOCAL_HOUSEHOLD_ID = 'lokaal'

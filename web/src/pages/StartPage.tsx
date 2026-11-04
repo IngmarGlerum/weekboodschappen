@@ -5,12 +5,12 @@ import { useAuth } from '../auth/AuthProvider'
 import { useHousehold } from '../auth/HouseholdProvider'
 import { describeError } from '../lib/errors'
 
-/** Eerste keer inloggen zonder uitnodiging: maak een huishouden aan. */
+/** Eerste keer inloggen zonder uitnodiging: maak een planning aan. */
 export default function StartPage() {
   const { household, createHousehold } = useHousehold()
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [name, setName] = useState('Ons huishouden')
+  const [name, setName] = useState('Onze weekplanning')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,12 +36,12 @@ export default function StartPage() {
       <Stack gap="5" w="full" maxW="420px" bg="bg" p="6" rounded="lg" borderWidth="1px" as="form" onSubmit={submit}>
         <Heading size="xl">Welkom!</Heading>
         <Text color="fg.muted">
-          Je bent ingelogd als {user?.email}. Maak een huishouden aan om samen te plannen. Daarna nodig je je partner
-          uit via de pagina Huishouden. Is je partner al begonnen? Open dan de uitnodigingslink die je kreeg, in plaats
-          van hier een nieuw huishouden te maken.
+          Je bent ingelogd als {user?.email}. Maak een planning aan om samen te plannen. Daarna nodig je je partner
+          uit via het menu linksboven. Is je partner al begonnen? Open dan de uitnodigingslink die je kreeg, in plaats
+          van hier een nieuwe planning te maken.
         </Text>
         <Field.Root required>
-          <Field.Label>Naam van het huishouden</Field.Label>
+          <Field.Label>Naam van de planning</Field.Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field.Root>
         {error && (
@@ -50,7 +50,7 @@ export default function StartPage() {
           </Text>
         )}
         <Button type="submit" colorPalette="green" loading={busy} disabled={!name.trim()}>
-          Huishouden aanmaken
+          Planning aanmaken
         </Button>
         <Button type="button" variant="ghost" onClick={() => void signOut()}>
           Uitloggen

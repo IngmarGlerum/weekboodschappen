@@ -18,6 +18,7 @@ const common = {
 export const AppSchema = new Schema({
   households: new Table({
     name: column.text,
+    avatar: column.text,
     created_at: column.text,
   }),
 
