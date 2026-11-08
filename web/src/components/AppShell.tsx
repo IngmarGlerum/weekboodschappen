@@ -1,13 +1,12 @@
-import { Badge, Box, Button, Flex, HStack, Heading, IconButton, Text } from '@chakra-ui/react'
-import { useStatus } from '@powersync/react'
+import { Box, Button, Flex, HStack, Heading, IconButton, Text } from '@chakra-ui/react'
 import { createContext, useContext, useMemo, useState } from 'react'
 import { LuCalendarDays, LuEllipsis, LuMenu, LuShoppingCart, LuStore, LuUtensils } from 'react-icons/lu'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth/AuthProvider'
 import { useCurrentHousehold } from '../auth/HouseholdProvider'
 import { startOfWeek, todayISO } from '../domain/dates'
 import { HouseholdAvatar } from './HouseholdAvatar'
 import { SettingsDrawer } from './SettingsDrawer'
+import { SyncBadge } from './SyncStatusDialog'
 
 interface WeekContextValue {
   /** Maandag van de week waar de gebruiker mee bezig is; gedeeld door Week en Boodschappen. */
@@ -21,15 +20,6 @@ export function useWeek(): WeekContextValue {
   const value = useContext(WeekContext)
   if (!value) throw new Error('useWeek buiten AppShell')
   return value
-}
-
-function SyncBadge() {
-  const { mode } = useAuth()
-  const status = useStatus()
-  if (mode === 'local') return <Badge colorPalette="gray">Alleen dit apparaat</Badge>
-  if (status.dataFlowStatus.uploading) return <Badge colorPalette="blue">Verzenden…</Badge>
-  if (status.connected) return <Badge colorPalette="green">Gesynchroniseerd</Badge>
-  return <Badge colorPalette="orange">Offline</Badge>
 }
 
 const NAV = [
