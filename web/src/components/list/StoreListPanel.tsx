@@ -426,9 +426,13 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
   const checked = item.done || phase !== 'idle'
   const struck = item.done || phase === 'strike' || phase === 'leaving'
 
+  // Staat de vinger voorbij de drempel? Voor de tik bij loslaten op de iPhone.
+  const armed = useRef(false)
+
   function onPointerDown(e: ReactPointerEvent) {
     if (e.pointerType !== 'touch') return
     swipe.current = { x: e.clientX, y: e.clientY, active: false }
+    armed.current = false
   }
   function onPointerMove(e: ReactPointerEvent) {
     const s = swipe.current
@@ -446,18 +450,21 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
       const next = Math.min(0, mx)
       // Tik op het moment dat je over de drempel gaat: loslaten = verwijderen.
       if (next <= -SWIPE_DELETE && dx > -SWIPE_DELETE) tick('medium')
+      armed.current = next <= -SWIPE_DELETE
       setDx(next)
     }
   }
   function onPointerEnd() {
     const wasActive = swipe.current?.active
     swipe.current = null
-    if (wasActive && dx <= -SWIPE_DELETE) {
-      // Op een iPhone kan de tik alleen bij loslaten (niet tijdens het vegen).
-      if (!canVibrate()) tick('medium')
-      onRemove()
-    }
+    if (wasActive && dx <= -SWIPE_DELETE) onRemove()
     setDx(0)
+  }
+  // iPhone: de tik mag alleen vanuit een "echte" aanraking. Safari stuurt na een
+  // veeg soms pointercancel in plaats van pointerup; touchend telt wel altijd.
+  function onTouchEnd() {
+    if (armed.current && !canVibrate()) tick('medium')
+    armed.current = false
   }
   const past = dx <= -SWIPE_DELETE
 
@@ -525,6 +532,7 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
+        onTouchEnd={onTouchEnd}
         {...sortable.attributes}
         {...sortable.listeners}
         role={undefined}
