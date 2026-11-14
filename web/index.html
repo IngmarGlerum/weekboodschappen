@@ -7,6 +7,17 @@
     <meta name="theme-color" content="#2f855a" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>Weekplanner</title>
+    <style>
+      /* iOS zoomt in op invoervelden met tekst kleiner dan 16px, en dan valt het
+         scherm er deels af. Op touchschermen daarom altijd minstens 16px. */
+      @media (pointer: coarse) {
+        input,
+        textarea,
+        select {
+          font-size: max(16px, 1em) !important;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

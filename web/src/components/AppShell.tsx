@@ -1,5 +1,5 @@
 import { Box, Button, Flex, HStack, Heading, IconButton, Text, useBreakpointValue } from '@chakra-ui/react'
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useMemo, useRef, useState } from 'react'
 import { LuCalendarDays, LuEllipsis, LuListTodo, LuMenu, LuShoppingCart, LuUtensils } from 'react-icons/lu'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useCurrentHousehold } from '../auth/HouseholdProvider'
@@ -25,9 +25,9 @@ export function useWeek(): WeekContextValue {
 
 const NAV = [
   { to: '/', label: 'Week', icon: LuCalendarDays, match: (p: string) => p === '/' },
+  { to: '/lijst', label: 'Lijst', icon: LuListTodo, match: (p: string) => p.startsWith('/lijst') },
   { to: '/gerechten', label: 'Gerechten', icon: LuUtensils, match: (p: string) => p.startsWith('/gerechten') },
   { to: '/boodschappen', label: 'Boodschappen', icon: LuShoppingCart, match: (p: string) => p.startsWith('/boodschappen') },
-  { to: '/lijst', label: 'Lijst', icon: LuListTodo, match: (p: string) => p.startsWith('/lijst') },
   {
     to: '/meer',
     label: 'Meer',
@@ -35,6 +35,42 @@ const NAV = [
     match: (p: string) => ['/meer', '/ingredienten', '/weekmenus', '/planning'].some((x) => p.startsWith(x)),
   },
 ]
+
+/**
+ * Op de telefoon vegen tussen Week en Lijst: op Week naar links vegen gaat naar
+ * de Lijst, op de Lijst naar rechts vegen terug naar Week. (Op de Lijst is naar
+ * links vegen over een item: verwijderen.)
+ */
+function useSwipeBetweenWeekAndList(enabled: boolean) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const start = useRef<{ x: number; y: number; t: number } | null>(null)
+
+  function onTouchStart(e: TouchEvent) {
+    const target = e.target as HTMLElement
+    if (!enabled || e.touches.length !== 1 || target.closest('input, textarea, [data-no-swipe]')) {
+      start.current = null
+      return
+    }
+    const t = e.touches[0]
+    start.current = { x: t.clientX, y: t.clientY, t: Date.now() }
+  }
+
+  function onTouchEnd(e: TouchEvent) {
+    const s = start.current
+    start.current = null
+    if (!s || e.changedTouches.length !== 1) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - s.x
+    const dy = t.clientY - s.y
+    // Snel en duidelijk zijwaarts; lang vasthouden is slepen in de lijst, geen vegen.
+    if (Date.now() - s.t > 600 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return
+    if (location.pathname === '/' && dx < 0) navigate('/lijst')
+    else if (location.pathname.startsWith('/lijst') && dx > 0) navigate('/')
+  }
+
+  return { onTouchStart, onTouchEnd }
+}
 
 export default function AppShell() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(todayISO()))
@@ -45,6 +81,7 @@ export default function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const wide = useBreakpointValue({ base: false, lg: true }) ?? false
   const sideBySide = wide && location.pathname === '/'
+  const swipe = useSwipeBetweenWeekAndList(!wide)
 
   return (
     <WeekContext.Provider value={weekValue}>
@@ -110,7 +147,18 @@ export default function AppShell() {
             </Box>
           </Flex>
         ) : (
-          <Box as="main" flex="1" w="full" maxW="720px" mx="auto" px="4" pt="4" pb="96px">
+          <Box
+            as="main"
+            flex="1"
+            w="full"
+            maxW="720px"
+            mx="auto"
+            px="4"
+            pt="4"
+            pb="96px"
+            onTouchStart={(e) => swipe.onTouchStart(e.nativeEvent)}
+            onTouchEnd={(e) => swipe.onTouchEnd(e.nativeEvent)}
+          >
             <Outlet />
           </Box>
         )}

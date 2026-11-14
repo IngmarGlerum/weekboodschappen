@@ -72,6 +72,7 @@ export function StoreListPanel({ compact = false }: { compact?: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [labelsOpen, setLabelsOpen] = useState(false)
   const input = useRef<HTMLInputElement>(null)
+  const keepFocus = useRef(false)
 
   const labelById = useMemo(() => new Map(labels.data.map((l) => [l.id, l])), [labels.data])
   const rowById = useMemo(() => new Map(items.data.map((r) => [r.id, r])), [items.data])
@@ -101,7 +102,11 @@ export function StoreListPanel({ compact = false }: { compact?: boolean }) {
     // Meteen leegmaken, zodat je direct het volgende item kunt typen.
     tick()
     setTitle('')
+    keepFocus.current = true
     input.current?.focus()
+    window.setTimeout(() => {
+      keepFocus.current = false
+    }, 400)
     try {
       await repo.addStoreItem(text, newLabel ?? activeFilter)
     } catch (error) {
@@ -222,6 +227,14 @@ export function StoreListPanel({ compact = false }: { compact?: boolean }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             enterKeyHint="enter"
+            autoComplete="off"
+            onBlur={(e) => {
+              // Net toegevoegd met de knop: focus terug, toetsenbord blijft open.
+              if (keepFocus.current) {
+                keepFocus.current = false
+                e.target.focus()
+              }
+            }}
           />
           {labels.data.length > 0 && (
             <LabelSelect
@@ -232,7 +245,16 @@ export function StoreListPanel({ compact = false }: { compact?: boolean }) {
               onManage={() => setLabelsOpen(true)}
             />
           )}
-          <IconButton type="submit" colorPalette="green" aria-label="Toevoegen" disabled={!title.trim()}>
+          <IconButton
+            type="submit"
+            colorPalette="green"
+            aria-label="Toevoegen"
+            disabled={!title.trim()}
+            // De knop mag de focus niet van het invoerveld afpakken, anders klapt
+            // op de telefoon het toetsenbord dicht na elk item.
+            onPointerDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => e.preventDefault()}
+          >
             <LuPlus />
           </IconButton>
         </Flex>
