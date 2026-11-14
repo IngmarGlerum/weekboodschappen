@@ -11,13 +11,15 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { Global } from '@emotion/react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { LuArrowUpDown, LuCheck, LuChevronDown, LuNotebookPen, LuPlus, LuStar, LuTags } from 'react-icons/lu'
 import { useStoreItems, useStoreLabels } from '../../data/hooks'
 import { useRepo } from '../../data/repo'
 import { isOn, type StoreItemRow, type StoreLabelRow } from '../../data/rows'
 import { arrangeList, positionAt, SORT_LABELS, type ListItem, type SortMode } from '../../domain/storeList'
 import { describeError } from '../../lib/errors'
+import { prefersReducedMotion, tick } from '../../lib/haptics'
 import { notify } from '../toaster'
 import { ItemDetail } from './ItemDetail'
 import { LabelBadge, LabelIcon } from './LabelBadge'
@@ -97,6 +99,7 @@ export function StoreListPanel({ compact = false }: { compact?: boolean }) {
     const text = title.trim()
     if (!text) return
     // Meteen leegmaken, zodat je direct het volgende item kunt typen.
+    tick()
     setTitle('')
     input.current?.focus()
     try {
@@ -144,6 +147,7 @@ export function StoreListPanel({ compact = false }: { compact?: boolean }) {
 
   return (
     <Stack gap="3">
+      <ListAnimations />
       <HStack justify="space-between" gap="2">
         <Heading size={compact ? 'md' : 'lg'}>Lijst</Heading>
         <HStack gap="1">
@@ -318,11 +322,87 @@ interface RowProps {
 
 const SWIPE_DELETE = 96
 
+// Afvinken gaat in stappen, zoals in een to-do-app:
+// 1. de cirkel vult zich met een groene spetter (tik),
+// 2. de tekst wordt doorgestreept (tik),
+// 3. het item verdwijnt naar Voltooid.
+const T_STRIKE = 280
+const T_LEAVE = 650
+const T_DONE = 920
+
+type Phase = 'idle' | 'burst' | 'strike' | 'leaving'
+
+// Keyframes als gewone CSS (zie <ListAnimations />), op naam te gebruiken.
+const pop = 'wp-list-pop'
+const splash = 'wp-list-splash'
+const draw = 'wp-list-draw'
+const ANIMATION_CSS = `
+  @keyframes ${pop} { 0% { transform: scale(0.6); } 55% { transform: scale(1.2); } 100% { transform: scale(1); } }
+  @keyframes ${splash} {
+    0% { transform: rotate(var(--a)) translateX(4px) scale(1); opacity: 1; }
+    100% { transform: rotate(var(--a)) translateX(28px) scale(0.3); opacity: 0; }
+  }
+  @keyframes ${draw} { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+`
+function ListAnimations() {
+  return <Global styles={ANIMATION_CSS} />
+}
+const SPLASH_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315]
+
 /** Eén regel: afvinkcirkel, naam met label en notitie-icoon, ster. Naar links vegen = verwijderen. */
 function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }: RowProps) {
   const sortable = useSortable({ id: item.id, disabled: !draggable })
   const [dx, setDx] = useState(0)
   const swipe = useRef<{ x: number; y: number; active: boolean } | null>(null)
+  const [phase, setPhase] = useState<Phase>('idle')
+  const timers = useRef<number[]>([])
+  const [height, setHeight] = useState<number | null>(null)
+  const node = useRef<HTMLElement | null>(null)
+
+  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), [])
+
+  function cancelAnimation() {
+    timers.current.forEach((t) => window.clearTimeout(t))
+    timers.current = []
+    setPhase('idle')
+    setHeight(null)
+  }
+
+  function pressCircle() {
+    // Weer openzetten, of nogmaals tikken tijdens de animatie: meteen, zonder show.
+    if (item.done) {
+      tick()
+      onToggle()
+      return
+    }
+    if (phase !== 'idle') {
+      cancelAnimation()
+      return
+    }
+    tick()
+    if (prefersReducedMotion()) {
+      onToggle()
+      return
+    }
+    setPhase('burst')
+    timers.current = [
+      window.setTimeout(() => {
+        setPhase('strike')
+        tick()
+      }, T_STRIKE),
+      window.setTimeout(() => {
+        setHeight(node.current?.offsetHeight ?? null)
+        setPhase('leaving')
+      }, T_LEAVE),
+      window.setTimeout(() => {
+        timers.current = []
+        onToggle()
+      }, T_DONE),
+    ]
+  }
+
+  const checked = item.done || phase !== 'idle'
+  const struck = item.done || phase === 'strike' || phase === 'leaving'
 
   function onPointerDown(e: ReactPointerEvent) {
     if (e.pointerType !== 'touch') return
@@ -357,12 +437,22 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
   return (
     <Box
       as="li"
-      ref={sortable.setNodeRef}
+      ref={(el: HTMLElement | null) => {
+        sortable.setNodeRef(el)
+        node.current = el
+      }}
       style={style}
       position="relative"
       zIndex={sortable.isDragging ? 2 : undefined}
       rounded="md"
-      overflow="hidden"
+      overflow={phase === 'burst' || phase === 'strike' ? 'visible' : 'hidden'}
+      // Laatste stap: het item klapt dicht en verdwijnt.
+      maxH={phase === 'leaving' ? '0px' : height !== null ? `${height}px` : undefined}
+      opacity={phase === 'leaving' ? 0 : 1}
+      mt={phase === 'leaving' ? '-1' : undefined}
+      transitionProperty="max-height, opacity, margin"
+      transitionDuration="0.26s"
+      transitionTimingFunction="ease-in"
       // Rood alleen tijdens het vegen, anders schemert het langs de randen.
       bg={dx ? 'red.solid' : undefined}
     >
@@ -409,21 +499,44 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
           variant="ghost"
           rounded="full"
           aria-label={item.done ? `${item.title} weer openzetten` : `${item.title} afvinken`}
-          aria-pressed={item.done}
-          onClick={onToggle}
+          aria-pressed={checked}
+          overflow="visible"
+          onClick={pressCircle}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <Box
-            boxSize="20px"
-            rounded="full"
-            borderWidth="2px"
-            borderColor={item.done ? 'green.solid' : 'border.emphasized'}
-            bg={item.done ? 'green.solid' : undefined}
-            color="white"
-            display="grid"
-            placeItems="center"
-          >
-            {item.done && <LuCheck size={12} strokeWidth={3} />}
+          <Box position="relative" boxSize="20px">
+            {phase !== 'idle' &&
+              SPLASH_ANGLES.map((angle) => (
+                <Box
+                  key={angle}
+                  aria-hidden
+                  position="absolute"
+                  top="50%"
+                  left="50%"
+                  boxSize="6px"
+                  mt="-3px"
+                  ml="-3px"
+                  rounded="full"
+                  bg="green.solid"
+                  pointerEvents="none"
+                  style={{ ['--a' as string]: `${angle}deg` }}
+                  css={{ animation: `${splash} 0.5s ease-out forwards`, transformOrigin: 'center' }}
+                />
+              ))}
+            <Box
+              boxSize="20px"
+              rounded="full"
+              borderWidth="2px"
+              borderColor={checked ? 'green.solid' : 'border.emphasized'}
+              bg={checked ? 'green.solid' : undefined}
+              color="white"
+              display="grid"
+              placeItems="center"
+              transition="background-color 0.15s, border-color 0.15s"
+              css={phase === 'burst' ? { animation: `${pop} 0.28s ease-out` } : undefined}
+            >
+              {checked && <LuCheck size={12} strokeWidth={3} />}
+            </Box>
           </Box>
         </IconButton>
 
@@ -436,13 +549,26 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
           onClick={onOpen}
           aria-label={`Details van ${item.title}`}
         >
-          <Text
-            truncate
-            textDecoration={item.done ? 'line-through' : undefined}
-            color={item.done ? 'fg.subtle' : undefined}
-          >
-            {item.title}
-          </Text>
+          {/* De doorhaling wordt getekend, van links naar rechts. */}
+          <Box position="relative" display="inline-block" maxW="full" verticalAlign="top">
+            <Text truncate color={struck ? 'fg.subtle' : undefined} transition="color 0.2s">
+              {item.title}
+            </Text>
+            {struck && (
+              <Box
+                aria-hidden
+                position="absolute"
+                left="0"
+                right="0"
+                top="52%"
+                h="1.5px"
+                bg="fg.subtle"
+                transformOrigin="left"
+                pointerEvents="none"
+                css={phase === 'strike' ? { animation: `${draw} 0.25s ease-out forwards` } : undefined}
+              />
+            )}
+          </Box>
           {(label || row?.note) && (
             <HStack gap="1.5" mt="0.5" minW="0">
               {label && <LabelBadge label={label} />}
