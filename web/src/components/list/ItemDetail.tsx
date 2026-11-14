@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { LuStar, LuTrash2 } from 'react-icons/lu'
 import { useRepo } from '../../data/repo'
 import { isOn, type StoreItemRow, type StoreLabelRow } from '../../data/rows'
+import { tick } from '../../lib/haptics'
 import { notify } from '../toaster'
 import { LabelSelect } from './LabelSelect'
 
@@ -52,6 +53,7 @@ export function ItemDetail({ item, labels, onClose, onManageLabels }: Props) {
   async function remove() {
     if (!item) return
     const { id, label } = item
+    tick('medium')
     onClose()
     await repo.removeStoreItem(id)
     notify.undo(`${label} verwijderd`, () => void repo.restoreStoreItems([id]))

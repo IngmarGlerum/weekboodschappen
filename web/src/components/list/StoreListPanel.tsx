@@ -447,7 +447,10 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
   function onPointerEnd() {
     const wasActive = swipe.current?.active
     swipe.current = null
-    if (wasActive && dx <= -SWIPE_DELETE) onRemove()
+    if (wasActive && dx <= -SWIPE_DELETE) {
+      tick('medium')
+      onRemove()
+    }
     setDx(0)
   }
 
