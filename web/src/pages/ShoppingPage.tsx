@@ -17,7 +17,7 @@ import {
 import { useState, type FormEvent } from 'react'
 import { LuChevronDown, LuChevronLeft, LuChevronRight, LuCopy, LuTrash2 } from 'react-icons/lu'
 import { AppDialog } from '../components/ConfirmDialog'
-import { useWeek } from '../components/AppShell'
+import { useWeek } from '../components/weekContext'
 import { notify } from '../components/toaster'
 import { useGeneralItems, useShoppingList } from '../data/hooks'
 import { isOn } from '../data/rows'

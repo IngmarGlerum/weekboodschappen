@@ -19,7 +19,7 @@ import { useRepo } from '../../data/repo'
 import { isOn, type StoreItemRow, type StoreLabelRow } from '../../data/rows'
 import { arrangeList, positionAt, SORT_LABELS, type ListItem, type SortMode } from '../../domain/storeList'
 import { describeError } from '../../lib/errors'
-import { prefersReducedMotion, tick } from '../../lib/haptics'
+import { canVibrate, prefersReducedMotion, tick } from '../../lib/haptics'
 import { notify } from '../toaster'
 import { ItemDetail } from './ItemDetail'
 import { LabelBadge, LabelIcon } from './LabelBadge'
@@ -442,17 +442,24 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
       }
       if (mx < -12) s.active = true
     }
-    if (s.active) setDx(Math.min(0, mx))
+    if (s.active) {
+      const next = Math.min(0, mx)
+      // Tik op het moment dat je over de drempel gaat: loslaten = verwijderen.
+      if (next <= -SWIPE_DELETE && dx > -SWIPE_DELETE) tick('medium')
+      setDx(next)
+    }
   }
   function onPointerEnd() {
     const wasActive = swipe.current?.active
     swipe.current = null
     if (wasActive && dx <= -SWIPE_DELETE) {
-      tick('medium')
+      // Op een iPhone kan de tik alleen bij loslaten (niet tijdens het vegen).
+      if (!canVibrate()) tick('medium')
       onRemove()
     }
     setDx(0)
   }
+  const past = dx <= -SWIPE_DELETE
 
   const style = {
     transform: CSS.Translate.toString(sortable.transform),
@@ -478,8 +485,9 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
       transitionProperty="max-height, opacity, margin"
       transitionDuration="0.26s"
       transitionTimingFunction="ease-in"
-      // Rood alleen tijdens het vegen, anders schemert het langs de randen.
-      bg={dx ? 'red.solid' : undefined}
+      // Tijdens het vegen grijs; rood zodra loslaten het item verwijdert.
+      bg={dx ? (past ? 'red.solid' : 'gray.muted') : undefined}
+      transition="background-color 0.12s"
     >
       <Flex
         hidden={!dx}
@@ -488,12 +496,14 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
         position="absolute"
         inset="0"
         pr="4"
-        color="white"
+        color={past ? 'white' : 'fg.muted'}
         fontSize="sm"
         fontWeight="semibold"
         aria-hidden
       >
-        Verwijderen
+        <Box transform={past ? 'scale(1.08)' : undefined} transition="transform 0.12s">
+          {past ? 'Loslaten: verwijderen' : 'Verwijderen'}
+        </Box>
       </Flex>
       <Flex
         align="center"
@@ -510,6 +520,7 @@ function Row({ item, row, label, draggable, onToggle, onStar, onOpen, onRemove }
         boxShadow={sortable.isDragging ? 'lg' : undefined}
         cursor={draggable ? 'grab' : undefined}
         touchAction="pan-y"
+        data-row-swipe=""
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}

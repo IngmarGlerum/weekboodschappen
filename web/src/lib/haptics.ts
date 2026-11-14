@@ -9,31 +9,32 @@
  * - Elders gebeurt er niets.
  */
 
-let iosSwitch: HTMLLabelElement | null = null
+/** Ondersteunt dit apparaat navigator.vibrate (Android)? */
+export const canVibrate = () => typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
 
 function iosTick() {
-  if (!iosSwitch) {
-    const label = document.createElement('label')
-    label.setAttribute('aria-hidden', 'true')
-    label.style.cssText = 'position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;left:-9999px'
-    const input = document.createElement('input')
-    input.type = 'checkbox'
-    input.setAttribute('switch', '')
-    input.tabIndex = -1
-    label.appendChild(input)
-    document.body.appendChild(label)
-    iosSwitch = label
-  }
-  iosSwitch.click()
+  // Zoals de bekende truc: een verse, verborgen schakelaar in <head>, aanklikken
+  // via het label en weer weghalen. iOS geeft daarbij zijn eigen systeemtik.
+  const label = document.createElement('label')
+  label.ariaHidden = 'true'
+  label.style.display = 'none'
+  const input = document.createElement('input')
+  input.type = 'checkbox'
+  input.setAttribute('switch', '')
+  label.appendChild(input)
+  document.head.appendChild(label)
+  label.click()
+  document.head.removeChild(label)
 }
 
 export function tick(strength: 'light' | 'medium' = 'light') {
   try {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    if (canVibrate()) {
       navigator.vibrate(strength === 'light' ? 8 : 15)
       return
     }
-    if (typeof document !== 'undefined' && /iP(hone|ad|od)/.test(navigator.userAgent)) iosTick()
+    // iPhone/iPad (ook een iPad die zich als Mac voordoet): geen vibrate, wel touch.
+    if (typeof document !== 'undefined' && navigator.maxTouchPoints > 0) iosTick()
   } catch {
     // Trillen is een extraatje; als het niet kan, gewoon doorgaan.
   }
