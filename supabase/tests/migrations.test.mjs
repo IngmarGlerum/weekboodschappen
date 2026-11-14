@@ -224,6 +224,28 @@ check('het laatste lid verlaat: de planning en alles erin verdwijnt', gone.h ===
 await expectError('verlaten kan alleen als je lid bent',
   () => as(C, () => q(`select public.leave_household($1)`, [hid])), /not_a_member/)
 
+// --- Lijst met labels ----------------------------------------------------------------
+console.log('\nLijst met labels')
+await as(A, async () => {
+  await q(`insert into public.store_labels (id, household_id, name, icon, color, modified_at) values ('l-jumbo', $1, 'Jumbo', '🛒', 'yellow', $2)`, [hid, ago(10)])
+  await q(`insert into public.store_items (id, household_id, label, label_id, note, important, position) values ('s1', $1, 'kaas', 'l-jumbo', 'jong belegen', true, 1)`, [hid])
+})
+const item = (await q(`select label, label_id, note, important, position, completed_at from public.store_items where id = 's1'`)).rows[0]
+check('een item heeft een label, notitie, ster en volgorde', item.label_id === 'l-jumbo' && item.note === 'jong belegen' && item.important === true && item.position === 1 && item.completed_at === null)
+const bSeesLabel = await as(B, async () => (await q(`select name from public.store_labels`)).rows.map((r) => r.name))
+check('het andere lid ziet het label', bSeesLabel.join() === 'Jumbo')
+const cSeesLabel = await as(C, async () => (await q(`select count(*)::int c from public.store_labels`)).rows[0].c)
+check('een vreemde ziet het label niet', cSeesLabel === 0)
+await expectError('een vreemde kan geen label maken in deze planning',
+  () => as(C, () => q(`insert into public.store_labels (household_id, name) values ($1, 'x')`, [hid])), /row-level security/)
+await as(B, () => q(`update public.store_labels set name = 'Jumbo (oud)', modified_at = $1 where id = 'l-jumbo'`, [ago(20)]))
+const lname = (await q(`select name from public.store_labels where id = 'l-jumbo'`)).rows[0].name
+check('ook voor labels wint de laatste wijziging', lname === 'Jumbo')
+await expectError('een kleur moet een eenvoudige naam zijn',
+  () => as(A, () => q(`insert into public.store_labels (household_id, name, color) values ($1, 'x', 'red; drop')`, [hid])), /check constraint|violates/)
+await expectError('een labelnaam mag niet leeg zijn',
+  () => as(A, () => q(`insert into public.store_labels (household_id, name) values ($1, '  ')`, [hid])), /check constraint|violates/)
+
 // --- Soft delete en weekmenu (requirement 12) ------------------------------------------
 console.log('\nWeekmenu en verwijderd gerecht (requirement 12)')
 await as(A, async () => {

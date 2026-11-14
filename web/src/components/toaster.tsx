@@ -16,6 +16,7 @@ export function Toaster() {
               {toast.title && <Toast.Title>{toast.title}</Toast.Title>}
               {toast.description && <Toast.Description>{toast.description}</Toast.Description>}
             </Stack>
+            {toast.action && <Toast.ActionTrigger>{toast.action.label}</Toast.ActionTrigger>}
             {toast.closable && <Toast.CloseTrigger />}
           </Toast.Root>
         )}
@@ -28,4 +29,7 @@ export const notify = {
   success: (title: string) => toaster.create({ title, type: 'success', duration: 2500 }),
   error: (title: string, description?: string) =>
     toaster.create({ title, description, type: 'error', duration: 6000, closable: true }),
+  /** Een melding met de knop "Ongedaan maken". */
+  undo: (title: string, onUndo: () => void) =>
+    toaster.create({ title, type: 'info', duration: 5000, action: { label: 'Ongedaan maken', onClick: onUndo } }),
 }

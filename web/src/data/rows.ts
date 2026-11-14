@@ -37,8 +37,23 @@ export interface GeneralItemRow {
 
 export interface StoreItemRow {
   id: string
+  /** De tekst van het item. */
   label: string
   done: number | null
+  label_id: string | null
+  note: string | null
+  important: number | null
+  position: number | null
+  created_at: string | null
+  completed_at: string | null
+}
+
+/** Een label zoals "Jumbo", met een emoji of een klein plaatje (data-URL) als icoon. */
+export interface StoreLabelRow {
+  id: string
+  name: string
+  icon: string | null
+  color: string | null
 }
 
 export interface ListStateRow {

@@ -141,7 +141,7 @@ export default function WeekmenuEditPage() {
       </Stack>
 
       <Stack gap="2">
-        <Heading size="md">Winkellijst bij dit weekmenu</Heading>
+        <Heading size="md">Items voor de lijst bij dit weekmenu</Heading>
         <Text color="fg.muted" fontSize="sm">
           Items voor de andere supermarkt die je mee wilt nemen wanneer je dit weekmenu gebruikt.
         </Text>
@@ -162,7 +162,7 @@ export default function WeekmenuEditPage() {
         <form onSubmit={addLabel}>
           <Flex gap="2">
             <Input
-              aria-label="Nieuw item voor de winkellijst"
+              aria-label="Nieuw item voor de lijst"
               placeholder="Nieuw item"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}

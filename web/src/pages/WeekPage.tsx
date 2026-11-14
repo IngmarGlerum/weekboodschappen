@@ -239,7 +239,7 @@ function SaveWeekmenuDialog({
           </Field.Root>
           {open_.length > 0 && (
             <Stack gap="2">
-              <Text fontWeight="medium">Winkellijst voor de andere supermarkt meenemen</Text>
+              <Text fontWeight="medium">Items van de lijst meenemen</Text>
               {open_.map((item) => (
                 <Checkbox.Root
                   key={item.id}

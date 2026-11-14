@@ -60,10 +60,23 @@ export const AppSchema = new Schema({
     is_pantry: column.integer,
   }),
 
+  // `label` is de tekst van het item; het label ("Jumbo") is `label_id`.
   store_items: new Table({
     ...common,
     label: column.text,
     done: column.integer,
+    label_id: column.text,
+    note: column.text,
+    important: column.integer,
+    position: column.real,
+    completed_at: column.text,
+  }),
+
+  store_labels: new Table({
+    ...common,
+    name: column.text,
+    icon: column.text,
+    color: column.text,
   }),
 
   list_states: new Table(

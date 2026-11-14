@@ -66,7 +66,8 @@ export default function App() {
             <Route path="gerechten" element={<DishesPage />} />
             <Route path="gerechten/:id" element={<DishEditPage />} />
             <Route path="boodschappen" element={<ShoppingPage />} />
-            <Route path="winkel" element={<StorePage />} />
+            <Route path="lijst" element={<StorePage />} />
+            <Route path="winkel" element={<Navigate to="/lijst" replace />} />
             <Route path="meer" element={<MorePage />} />
             <Route path="ingredienten" element={<IngredientsPage />} />
             <Route path="weekmenus" element={<WeekmenusPage />} />

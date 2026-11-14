@@ -58,15 +58,21 @@ export function createRepo(householdId: string) {
     )
   }
 
+  /** Nieuw item onderaan de lijst. */
   async function insertStoreItem(
     tx: { execute: (sql: string, params?: unknown[]) => Promise<unknown> },
     label: string,
     t: string,
-  ) {
+    labelId: string | null = null,
+  ): Promise<string> {
+    const id = newId()
     await tx.execute(
-      `INSERT INTO store_items (id, household_id, label, done, modified_at, created_at) VALUES (?, ?, ?, 0, ?, ?)`,
-      [newId(), hid, label.trim(), t, t],
+      `INSERT INTO store_items (id, household_id, label, done, label_id, important, position, modified_at, created_at)
+       VALUES (?, ?, ?, 0, ?, 0,
+               (SELECT COALESCE(MAX(position), 0) + 1 FROM store_items WHERE household_id = ?), ?, ?)`,
+      [id, hid, label.trim(), labelId, hid, t, t],
     )
+    return id
   }
 
   return {
@@ -234,28 +240,115 @@ export function createRepo(householdId: string) {
       })
     },
 
-    // --- Winkellijst voor een andere supermarkt (requirement 7) ---------
-    async addStoreItem(label: string) {
-      await db.writeTransaction((tx) => insertStoreItem(tx, label, nowISO()))
+    // --- De lijst (requirement 7 en 14): vaste lijst met labels ---------
+    async addStoreItem(label: string, labelId: string | null = null): Promise<string> {
+      return db.writeTransaction((tx) => insertStoreItem(tx, label, nowISO(), labelId))
     },
 
     async setStoreItemDone(id: string, done: boolean) {
-      await db.execute(`UPDATE store_items SET done = ?, modified_at = ? WHERE id = ?`, [
+      const t = nowISO()
+      await db.execute(`UPDATE store_items SET done = ?, completed_at = ?, modified_at = ? WHERE id = ?`, [
         flag(done),
+        done ? t : null,
+        t,
+        id,
+      ])
+    },
+
+    async updateStoreItem(
+      id: string,
+      patch: { label?: string; note?: string | null; labelId?: string | null; important?: boolean },
+    ) {
+      const sets: string[] = []
+      const params: unknown[] = []
+      if (patch.label !== undefined) {
+        sets.push('label = ?')
+        params.push(patch.label.trim())
+      }
+      if (patch.note !== undefined) {
+        sets.push('note = ?')
+        params.push(patch.note?.trim() ? patch.note.trim() : null)
+      }
+      if (patch.labelId !== undefined) {
+        sets.push('label_id = ?')
+        params.push(patch.labelId)
+      }
+      if (patch.important !== undefined) {
+        sets.push('important = ?')
+        params.push(flag(patch.important))
+      }
+      if (sets.length === 0) return
+      await db.execute(`UPDATE store_items SET ${sets.join(', ')}, modified_at = ? WHERE id = ?`, [
+        ...params,
         nowISO(),
         id,
       ])
     },
 
+    /** Nieuwe plek in de eigen volgorde (een getal tussen de buren in). */
+    async moveStoreItem(id: string, position: number) {
+      await db.execute(`UPDATE store_items SET position = ?, modified_at = ? WHERE id = ?`, [position, nowISO(), id])
+    },
+
     removeStoreItem: (id: string) => softDelete('store_items', id),
 
-    async clearDoneStoreItems() {
+    /** Ongedaan maken van verwijderen. */
+    async restoreStoreItems(ids: string[]) {
+      await db.writeTransaction(async (tx) => {
+        const t = nowISO()
+        for (const id of ids) {
+          await tx.execute(`UPDATE store_items SET deleted_at = NULL, modified_at = ? WHERE id = ?`, [t, id])
+        }
+      })
+    },
+
+    async addStoreLabel(input: { name: string; icon: string | null; color: string }): Promise<string> {
+      const id = newId()
       const t = nowISO()
       await db.execute(
-        `UPDATE store_items SET deleted_at = ?, modified_at = ?
-          WHERE household_id = ? AND done = 1 AND deleted_at IS NULL`,
-        [t, t, hid],
+        `INSERT INTO store_labels (id, household_id, name, icon, color, modified_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, hid, input.name.trim(), input.icon, input.color, t, t],
       )
+      return id
+    },
+
+    async updateStoreLabel(id: string, input: { name: string; icon: string | null; color: string }) {
+      await db.execute(`UPDATE store_labels SET name = ?, icon = ?, color = ?, modified_at = ? WHERE id = ?`, [
+        input.name.trim(),
+        input.icon,
+        input.color,
+        nowISO(),
+        id,
+      ])
+    },
+
+    /** Het label verdwijnt; de items blijven, zonder label. */
+    async removeStoreLabel(id: string) {
+      await db.writeTransaction(async (tx) => {
+        const t = nowISO()
+        await tx.execute(`UPDATE store_labels SET deleted_at = ?, modified_at = ? WHERE id = ?`, [t, t, id])
+        await tx.execute(
+          `UPDATE store_items SET label_id = NULL, modified_at = ? WHERE household_id = ? AND label_id = ?`,
+          [t, hid, id],
+        )
+      })
+    },
+
+    /** Wist alle afgevinkte items en geeft hun id's terug (voor ongedaan maken). */
+    async clearDoneStoreItems(): Promise<string[]> {
+      return db.writeTransaction(async (tx) => {
+        const rows = await tx.getAll<{ id: string }>(
+          `SELECT id FROM store_items WHERE household_id = ? AND done = 1 AND deleted_at IS NULL`,
+          [hid],
+        )
+        const t = nowISO()
+        await tx.execute(
+          `UPDATE store_items SET deleted_at = ?, modified_at = ?
+            WHERE household_id = ? AND done = 1 AND deleted_at IS NULL`,
+          [t, t, hid],
+        )
+        return rows.map((r) => r.id)
+      })
     },
 
     // --- Weekmenu's (requirement 12) ------------------------------------
@@ -329,7 +422,13 @@ export function createRepo(householdId: string) {
      * de winkellijst (items die al op de lijst staan worden niet dubbel toegevoegd).
      * De boodschappenlijst volgt vanzelf, want die wordt uit de week uitgerekend.
      */
-    async applyWeekmenu(input: { menuDays: MenuDay[]; weekStart: string; storeLabels: string[] }) {
+    async applyWeekmenu(input: {
+      menuDays: MenuDay[]
+      weekStart: string
+      storeLabels: string[]
+      /** Label voor de items die op de lijst komen (bijvoorbeeld "Jumbo"). */
+      labelId?: string | null
+    }) {
       await db.writeTransaction(async (tx) => {
         const t = nowISO()
         for (const day of menuToWeek(input.menuDays, input.weekStart)) {
@@ -343,7 +442,7 @@ export function createRepo(householdId: string) {
         for (const label of input.storeLabels) {
           if (known.has(normalizeName(label))) continue
           known.add(normalizeName(label))
-          await insertStoreItem(tx, label, t)
+          await insertStoreItem(tx, label, t, input.labelId ?? null)
         }
       })
     },

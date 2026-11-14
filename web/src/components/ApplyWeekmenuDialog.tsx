@@ -1,12 +1,13 @@
-import { Button, Checkbox, Stack, Text } from '@chakra-ui/react'
+import { Button, Checkbox, HStack, Stack, Text } from '@chakra-ui/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useWeekDays, useWeekmenuDays, useWeekmenuStoreItems } from '../data/hooks'
+import { useStoreLabels, useWeekDays, useWeekmenuDays, useWeekmenuStoreItems } from '../data/hooks'
 import { useRepo } from '../data/repo'
 import { addDays, formatDayMonth, isoWeekNumber } from '../domain/dates'
 import { needsOverwriteConfirmation } from '../domain/weekmenu'
 import { describeError } from '../lib/errors'
 import { AppDialog } from './ConfirmDialog'
+import { LabelSelect } from './list/LabelSelect'
 import { notify } from './toaster'
 
 interface Props {
@@ -19,7 +20,7 @@ interface Props {
 /**
  * Een weekmenu toepassen op de week waar je mee bezig bent (requirement 12):
  * de week en de boodschappenlijst worden gevuld, en je kiest welke items van
- * de winkellijst mee mogen. Is de week al ingevuld, dan staat er een waarschuwing.
+ * de lijst mee mogen. Is de week al ingevuld, dan staat er een waarschuwing.
  */
 export function ApplyWeekmenuDialog({ open, menu, weekStart, onClose }: Props) {
   const repo = useRepo()
@@ -28,6 +29,8 @@ export function ApplyWeekmenuDialog({ open, menu, weekStart, onClose }: Props) {
   const allStoreItems = useWeekmenuStoreItems()
   const currentWeek = useWeekDays(weekStart)
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
+  const labels = useStoreLabels()
+  const [labelId, setLabelId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const menuDays = useMemo(
@@ -57,6 +60,7 @@ export function ApplyWeekmenuDialog({ open, menu, weekStart, onClose }: Props) {
         menuDays,
         weekStart,
         storeLabels: storeItems.filter((i) => !excluded.has(i.id)).map((i) => i.label),
+        labelId,
       })
       notify.success(`"${menu.name}" staat nu in week ${isoWeekNumber(weekStart)}`)
       onClose()
@@ -96,7 +100,10 @@ export function ApplyWeekmenuDialog({ open, menu, weekStart, onClose }: Props) {
         )}
         {storeItems.length > 0 && (
           <Stack gap="2">
-            <Text fontWeight="medium">Items voor de winkellijst</Text>
+            <HStack justify="space-between" gap="2">
+              <Text fontWeight="medium">Items voor de lijst</Text>
+              {labels.data.length > 0 && <LabelSelect labels={labels.data} value={labelId} onChange={setLabelId} />}
+            </HStack>
             {storeItems.map((item) => (
               <Checkbox.Root
                 key={item.id}

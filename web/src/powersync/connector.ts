@@ -17,7 +17,7 @@ import { env } from '../lib/env'
 const FATAL_POSTGRES_ERRORS = [/^22...$/, /^23...$/, /^42501$/]
 
 /** SQLite kent geen boolean; PowerSync geeft 0 en 1. Postgres wil true en false. */
-const BOOLEAN_COLUMNS = new Set(['is_pantry', 'done', 'missing', 'checked'])
+const BOOLEAN_COLUMNS = new Set(['is_pantry', 'done', 'missing', 'checked', 'important'])
 
 function toPostgresRow(data: Record<string, unknown> | undefined): Record<string, unknown> {
   const row: Record<string, unknown> = {}

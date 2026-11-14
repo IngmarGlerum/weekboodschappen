@@ -37,7 +37,7 @@ Een telefoonklok die vooruit loopt wordt teruggezet naar nu, zodat één telefoo
 
 1. Maak een project aan.
 2. Voer de bestanden in `supabase/migrations/` uit, op volgorde van naam (SQL-editor, of met de Supabase CLI):
-   eerst `20261102090000_init.sql`, dan `20261104090000_planningen.sql`.
+   eerst `20261102090000_init.sql`, dan `20261104090000_planningen.sql`, dan `20261114090000_lijst.sql`.
 3. Voer daarna `supabase/powersync_setup.sql` uit. **Vervang eerst het wachtwoord** in dat bestand.
 4. Inloggen gaat met e-mailadres en wachtwoord. Een nieuw account en *wachtwoord vergeten* gaan met een
    code uit de e-mail: zo is het adres één keer geverifieerd, daarna kies je een wachtwoord en blijf je

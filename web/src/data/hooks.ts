@@ -11,6 +11,7 @@ import {
   type IngredientRow,
   type ListStateRow,
   type StoreItemRow,
+  type StoreLabelRow,
   type WeekDayRow,
   type WeekmenuDayRow,
   type WeekmenuRow,
@@ -86,8 +87,17 @@ export function useGeneralItems() {
 export function useStoreItems() {
   const hid = useHid()
   return useQuery<StoreItemRow>(
-    `SELECT id, label, done FROM store_items
-     WHERE household_id = ? AND deleted_at IS NULL ORDER BY created_at, id`,
+    `SELECT id, label, done, label_id, note, important, position, created_at, completed_at FROM store_items
+     WHERE household_id = ? AND deleted_at IS NULL ORDER BY position, created_at, id`,
+    [hid],
+  )
+}
+
+export function useStoreLabels() {
+  const hid = useHid()
+  return useQuery<StoreLabelRow>(
+    `SELECT id, name, icon, color FROM store_labels
+     WHERE household_id = ? AND deleted_at IS NULL ORDER BY name COLLATE NOCASE`,
     [hid],
   )
 }

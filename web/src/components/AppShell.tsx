@@ -1,10 +1,11 @@
-import { Box, Button, Flex, HStack, Heading, IconButton, Text } from '@chakra-ui/react'
+import { Box, Button, Flex, HStack, Heading, IconButton, Text, useBreakpointValue } from '@chakra-ui/react'
 import { createContext, useContext, useMemo, useState } from 'react'
-import { LuCalendarDays, LuEllipsis, LuMenu, LuShoppingCart, LuStore, LuUtensils } from 'react-icons/lu'
+import { LuCalendarDays, LuEllipsis, LuListTodo, LuMenu, LuShoppingCart, LuUtensils } from 'react-icons/lu'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useCurrentHousehold } from '../auth/HouseholdProvider'
 import { startOfWeek, todayISO } from '../domain/dates'
 import { HouseholdAvatar } from './HouseholdAvatar'
+import { StoreListPanel } from './list/StoreListPanel'
 import { SettingsDrawer } from './SettingsDrawer'
 import { SyncBadge } from './SyncStatusDialog'
 
@@ -26,7 +27,7 @@ const NAV = [
   { to: '/', label: 'Week', icon: LuCalendarDays, match: (p: string) => p === '/' },
   { to: '/gerechten', label: 'Gerechten', icon: LuUtensils, match: (p: string) => p.startsWith('/gerechten') },
   { to: '/boodschappen', label: 'Boodschappen', icon: LuShoppingCart, match: (p: string) => p.startsWith('/boodschappen') },
-  { to: '/winkel', label: 'Winkel', icon: LuStore, match: (p: string) => p.startsWith('/winkel') },
+  { to: '/lijst', label: 'Lijst', icon: LuListTodo, match: (p: string) => p.startsWith('/lijst') },
   {
     to: '/meer',
     label: 'Meer',
@@ -42,6 +43,8 @@ export default function AppShell() {
   const weekValue = useMemo(() => ({ weekStart, setWeekStart }), [weekStart])
   const household = useCurrentHousehold()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const wide = useBreakpointValue({ base: false, lg: true }) ?? false
+  const sideBySide = wide && location.pathname === '/'
 
   return (
     <WeekContext.Provider value={weekValue}>
@@ -84,9 +87,33 @@ export default function AppShell() {
         </Flex>
         <SettingsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
-        <Box as="main" flex="1" w="full" maxW="720px" mx="auto" px="4" pt="4" pb="96px">
-          <Outlet />
-        </Box>
+        {sideBySide ? (
+          // Breed scherm: de week en de lijst naast elkaar, elk met een eigen scrollbalk.
+          <Flex as="main" flex="1" w="full" maxW="1280px" mx="auto" px="4" gap="6" align="flex-start">
+            <Box flex="1.2" minW="0" pt="4" pb="96px">
+              <Outlet />
+            </Box>
+            <Box
+              as="aside"
+              aria-label="Lijst"
+              flex="1"
+              minW="0"
+              position="sticky"
+              top="64px"
+              maxH="calc(100dvh - 64px - 72px)"
+              overflowY="auto"
+              pt="4"
+              pb="4"
+              px="1"
+            >
+              <StoreListPanel compact />
+            </Box>
+          </Flex>
+        ) : (
+          <Box as="main" flex="1" w="full" maxW="720px" mx="auto" px="4" pt="4" pb="96px">
+            <Outlet />
+          </Box>
+        )}
 
         <HStack
           as="nav"

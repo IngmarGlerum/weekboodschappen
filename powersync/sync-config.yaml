@@ -39,6 +39,10 @@ streams:
     auto_subscribe: true
     query: SELECT * FROM store_items WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
 
+  store_labels:
+    auto_subscribe: true
+    query: SELECT * FROM store_labels WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
   list_states:
     auto_subscribe: true
     query: SELECT * FROM list_states WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
