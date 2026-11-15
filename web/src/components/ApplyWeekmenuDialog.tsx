@@ -7,7 +7,7 @@ import { addDays, formatDayMonth, isoWeekNumber } from '../domain/dates'
 import { needsOverwriteConfirmation } from '../domain/weekmenu'
 import { describeError } from '../lib/errors'
 import { AppDialog } from './ConfirmDialog'
-import { LabelSelect } from './list/LabelSelect'
+import { StoreBadge } from './list/LabelBadge'
 import { notify } from './toaster'
 
 interface Props {
@@ -30,7 +30,6 @@ export function ApplyWeekmenuDialog({ open, menu, weekStart, onClose }: Props) {
   const currentWeek = useWeekDays(weekStart)
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const labels = useStoreLabels()
-  const [labelId, setLabelId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const menuDays = useMemo(
@@ -59,8 +58,7 @@ export function ApplyWeekmenuDialog({ open, menu, weekStart, onClose }: Props) {
       await repo.applyWeekmenu({
         menuDays,
         weekStart,
-        storeLabels: storeItems.filter((i) => !excluded.has(i.id)).map((i) => i.label),
-        labelId,
+        items: storeItems.filter((i) => !excluded.has(i.id)).map((i) => ({ label: i.label, labelId: i.label_id })),
       })
       notify.success(`"${menu.name}" staat nu in week ${isoWeekNumber(weekStart)}`)
       onClose()
@@ -100,10 +98,10 @@ export function ApplyWeekmenuDialog({ open, menu, weekStart, onClose }: Props) {
         )}
         {storeItems.length > 0 && (
           <Stack gap="2">
-            <HStack justify="space-between" gap="2">
-              <Text fontWeight="medium">Items voor de lijst</Text>
-              {labels.data.length > 0 && <LabelSelect labels={labels.data} value={labelId} onChange={setLabelId} />}
-            </HStack>
+            <Text fontWeight="medium">Boodschappen bij dit weekmenu</Text>
+            <Text color="fg.muted" fontSize="sm">
+              Picnic-items komen bij de boodschappen van deze week, de rest op de Lijst.
+            </Text>
             {storeItems.map((item) => (
               <Checkbox.Root
                 key={item.id}
@@ -120,7 +118,12 @@ export function ApplyWeekmenuDialog({ open, menu, weekStart, onClose }: Props) {
               >
                 <Checkbox.HiddenInput />
                 <Checkbox.Control />
-                <Checkbox.Label>{item.label}</Checkbox.Label>
+                <Checkbox.Label>
+                  <HStack gap="2" as="span">
+                    <Text as="span">{item.label}</Text>
+                    <StoreBadge labels={labels.data} labelId={item.label_id} />
+                  </HStack>
+                </Checkbox.Label>
               </Checkbox.Root>
             ))}
           </Stack>

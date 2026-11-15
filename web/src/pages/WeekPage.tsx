@@ -7,9 +7,10 @@ import { useWeek } from '../components/weekContext'
 import { DishPickerDialog } from '../components/DishPickerDialog'
 import { NewWeekmenuDialog } from '../components/NewWeekmenuDialog'
 import { notify } from '../components/toaster'
-import { useAllDishes, useStoreItems, useWeekDays } from '../data/hooks'
+import { useAllDishes, useStoreItems, useStoreLabels, useWeekDays, useWeekExtras } from '../data/hooks'
 import { isOn } from '../data/rows'
-import { useRepo } from '../data/repo'
+import { LIST_WITHOUT_LABEL, useRepo } from '../data/repo'
+import { StoreBadge } from '../components/list/LabelBadge'
 import {
   addDays,
   formatDayMonth,
@@ -188,6 +189,9 @@ function SaveWeekmenuDialog({
   const repo = useRepo()
   const navigate = useNavigate()
   const storeItems = useStoreItems()
+  const { weekStart } = useWeek()
+  const extras = useWeekExtras(weekStart)
+  const labels = useStoreLabels()
   const [name, setName] = useState('')
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -201,7 +205,13 @@ function SaveWeekmenuDialog({
       await repo.saveWeekAsMenu({
         name,
         days,
-        storeLabels: open_.filter((i) => !excluded.has(i.id)).map((i) => i.label),
+        items: [
+          // Picnic-extra's van deze week, en de open items van de Lijst (met hun winkel).
+          ...extras.data.filter((x) => !excluded.has(x.id)).map((x) => ({ label: x.name, labelId: null })),
+          ...open_
+            .filter((i) => !excluded.has(i.id))
+            .map((i) => ({ label: i.label, labelId: i.label_id ?? LIST_WITHOUT_LABEL })),
+        ],
       })
       notify.success(`Weekmenu "${name.trim()}" opgeslagen`)
       setName('')
@@ -237,10 +247,13 @@ function SaveWeekmenuDialog({
             <Field.Label>Naam</Field.Label>
             <Input autoFocus placeholder="Bijvoorbeeld Weekmenu 1" value={name} onChange={(e) => setName(e.target.value)} />
           </Field.Root>
-          {open_.length > 0 && (
+          {open_.length + extras.data.length > 0 && (
             <Stack gap="2">
-              <Text fontWeight="medium">Items van de lijst meenemen</Text>
-              {open_.map((item) => (
+              <Text fontWeight="medium">Losse boodschappen meenemen</Text>
+              {[
+                ...extras.data.map((x) => ({ id: x.id, label: x.name, labelId: null as string | null })),
+                ...open_.map((i) => ({ id: i.id, label: i.label, labelId: i.label_id ?? LIST_WITHOUT_LABEL })),
+              ].map((item) => (
                 <Checkbox.Root
                   key={item.id}
                   checked={!excluded.has(item.id)}
@@ -255,7 +268,12 @@ function SaveWeekmenuDialog({
                 >
                   <Checkbox.HiddenInput />
                   <Checkbox.Control />
-                  <Checkbox.Label>{item.label}</Checkbox.Label>
+                  <Checkbox.Label>
+                    <HStack gap="2" as="span">
+                      <Text as="span">{item.label}</Text>
+                      <StoreBadge labels={labels.data} labelId={item.labelId} />
+                    </HStack>
+                  </Checkbox.Label>
                 </Checkbox.Root>
               ))}
             </Stack>

@@ -12,6 +12,7 @@ import {
   type ListStateRow,
   type StoreItemRow,
   type StoreLabelRow,
+  type WeekExtraRow,
   type WeekDayRow,
   type WeekmenuDayRow,
   type WeekmenuRow,
@@ -32,7 +33,7 @@ const useHid = () => useCurrentHousehold().id
 export function useIngredients() {
   const hid = useHid()
   return useQuery<IngredientRow>(
-    `SELECT id, name, default_unit, is_pantry FROM ingredients
+    `SELECT id, name, default_unit, is_pantry, label_id FROM ingredients
      WHERE household_id = ? AND deleted_at IS NULL ORDER BY name COLLATE NOCASE`,
     [hid],
   )
@@ -78,9 +79,18 @@ export function useWeekDays(weekStart: string) {
 export function useGeneralItems() {
   const hid = useHid()
   return useQuery<GeneralItemRow>(
-    `SELECT id, name, is_pantry FROM general_items
+    `SELECT id, name, is_pantry, label_id FROM general_items
      WHERE household_id = ? AND deleted_at IS NULL ORDER BY name COLLATE NOCASE`,
     [hid],
+  )
+}
+
+export function useWeekExtras(weekStart: string) {
+  const hid = useHid()
+  return useQuery<WeekExtraRow>(
+    `SELECT id, name FROM week_extras
+     WHERE household_id = ? AND week_start = ? AND deleted_at IS NULL ORDER BY created_at, id`,
+    [hid, weekStart],
   )
 }
 
@@ -122,7 +132,7 @@ export function useWeekmenuDays() {
 export function useWeekmenuStoreItems() {
   const hid = useHid()
   return useQuery<WeekmenuStoreItemRow>(
-    `SELECT id, weekmenu_id, label FROM weekmenu_store_items
+    `SELECT id, weekmenu_id, label, label_id FROM weekmenu_store_items
      WHERE household_id = ? AND deleted_at IS NULL ORDER BY created_at, id`,
     [hid],
   )
@@ -138,7 +148,7 @@ export function useShoppingList(weekStart: string): { list: ShoppingList; isLoad
   const dishes = useAllDishes()
   const dishIngredients = useDishIngredients()
   const ingredients = useQuery<IngredientRow>(
-    `SELECT id, name, default_unit, is_pantry FROM ingredients WHERE household_id = ?`,
+    `SELECT id, name, default_unit, is_pantry, label_id FROM ingredients WHERE household_id = ?`,
     [hid],
   )
   const general = useGeneralItems()
@@ -148,7 +158,9 @@ export function useShoppingList(weekStart: string): { list: ShoppingList; isLoad
     [hid, weekStart],
   )
 
-  const isLoading = [days, dishes, dishIngredients, ingredients, general, states].some((q) => q.isLoading)
+  const extras = useWeekExtras(weekStart)
+  const labels = useStoreLabels()
+  const isLoading = [days, dishes, dishIngredients, ingredients, general, states, extras].some((q) => q.isLoading)
 
   const list = useMemo(
     () =>
@@ -161,8 +173,15 @@ export function useShoppingList(weekStart: string): { list: ShoppingList; isLoad
           quantity: d.quantity,
           unit: d.unit ?? '',
         })),
-        ingredients: ingredients.data.map((i) => ({ id: i.id, name: i.name, isPantry: isOn(i.is_pantry) })),
-        generalItems: general.data.map((g) => ({ id: g.id, name: g.name, isPantry: isOn(g.is_pantry) })),
+        ingredients: ingredients.data.map((i) => ({
+          id: i.id,
+          name: i.name,
+          isPantry: isOn(i.is_pantry),
+          labelId: i.label_id,
+        })),
+        generalItems: general.data.map((g) => ({ id: g.id, name: g.name, isPantry: isOn(g.is_pantry), labelId: g.label_id })),
+        extras: extras.data.map((x) => ({ id: x.id, name: x.name })),
+        labelIds: labels.isLoading ? undefined : labels.data.map((l) => l.id),
         states: states.data.map((s) => ({
           refType: s.ref_type,
           refKey: s.ref_key,
@@ -170,7 +189,7 @@ export function useShoppingList(weekStart: string): { list: ShoppingList; isLoad
           checked: isOn(s.checked),
         })),
       }),
-    [days.data, dishes.data, dishIngredients.data, ingredients.data, general.data, states.data],
+    [days.data, dishes.data, dishIngredients.data, ingredients.data, general.data, states.data, extras.data, labels.data, labels.isLoading],
   )
 
   return { list, isLoading }

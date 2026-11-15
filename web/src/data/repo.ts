@@ -24,6 +24,18 @@ export const listStateId = (householdId: string, weekStart: string, refType: Ref
   `${householdId}|${weekStart}|${refType}|${refKey}`
 export const weekmenuDayId = (menuId: string, weekday: number) => `${menuId}|${weekday}`
 
+/**
+ * Bij een weekmenu-item: "op de Lijst, zonder winkel". (Een leeg label betekent
+ * daar Picnic, net als bij ingrediënten en vaste boodschappen.)
+ */
+export const LIST_WITHOUT_LABEL = '__lijst'
+
+/** Een item van een weekmenu: labelId null = Picnic, LIST_WITHOUT_LABEL = Lijst zonder winkel. */
+export interface MenuItemInput {
+  label: string
+  labelId: string | null
+}
+
 export interface DishLineInput {
   ingredientId: string
   quantity: number | null
@@ -102,6 +114,11 @@ export function createRepo(householdId: string) {
         nowISO(),
         id,
       ])
+    },
+
+    /** Winkel van een ingrediënt; null = Picnic. */
+    async setIngredientLabel(id: string, labelId: string | null) {
+      await db.execute(`UPDATE ingredients SET label_id = ?, modified_at = ? WHERE id = ?`, [labelId, nowISO(), id])
     },
 
     async setIngredientUnit(id: string, unit: string) {
@@ -213,6 +230,22 @@ export function createRepo(householdId: string) {
     },
 
     removeGeneralItem: (id: string) => softDelete('general_items', id),
+
+    /** Winkel van een vaste boodschap; null = Picnic. */
+    async setGeneralLabel(id: string, labelId: string | null) {
+      await db.execute(`UPDATE general_items SET label_id = ?, modified_at = ? WHERE id = ?`, [labelId, nowISO(), id])
+    },
+
+    // --- Extra voor deze week (losse Picnic-boodschap) ------------------
+    async addWeekExtra(weekStart: string, name: string) {
+      const t = nowISO()
+      await db.execute(
+        `INSERT INTO week_extras (id, household_id, week_start, name, modified_at, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        [newId(), hid, weekStart, name.trim(), t, t],
+      )
+    },
+
+    removeWeekExtra: (id: string) => softDelete('week_extras', id),
 
     // --- Keuzes bij de boodschappenlijst (requirement 4 en 6) -----------
     /** Zet "niet in huis" en/of "afgevinkt" voor één regel van één week. */
@@ -378,19 +411,28 @@ export function createRepo(householdId: string) {
       )
     },
 
-    async addWeekmenuStoreItem(menuId: string, label: string) {
+    /** labelId: null = Picnic, LIST_WITHOUT_LABEL = op de Lijst zonder winkel, anders een label. */
+    async addWeekmenuStoreItem(menuId: string, label: string, labelId: string | null = null) {
       const t = nowISO()
       await db.execute(
-        `INSERT INTO weekmenu_store_items (id, household_id, weekmenu_id, label, modified_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [newId(), hid, menuId, label.trim(), t, t],
+        `INSERT INTO weekmenu_store_items (id, household_id, weekmenu_id, label, label_id, modified_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [newId(), hid, menuId, label.trim(), labelId, t, t],
       )
+    },
+
+    async setWeekmenuStoreItemLabel(id: string, labelId: string | null) {
+      await db.execute(`UPDATE weekmenu_store_items SET label_id = ?, modified_at = ? WHERE id = ?`, [
+        labelId,
+        nowISO(),
+        id,
+      ])
     },
 
     removeWeekmenuStoreItem: (id: string) => softDelete('weekmenu_store_items', id),
 
     /** Slaat de ingevulde week op als weekmenu, met de gekozen items van de winkellijst. */
-    async saveWeekAsMenu(input: { name: string; days: PlannedDay[]; storeLabels: string[] }): Promise<string> {
+    async saveWeekAsMenu(input: { name: string; days: PlannedDay[]; items: MenuItemInput[] }): Promise<string> {
       const id = newId()
       await db.writeTransaction(async (tx) => {
         const t = nowISO()
@@ -406,11 +448,11 @@ export function createRepo(householdId: string) {
             [weekmenuDayId(id, day.weekday), hid, id, day.weekday, day.dishId, t, t],
           )
         }
-        for (const label of input.storeLabels) {
+        for (const item of input.items) {
           await tx.execute(
-            `INSERT INTO weekmenu_store_items (id, household_id, weekmenu_id, label, modified_at, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [newId(), hid, id, label.trim(), t, t],
+            `INSERT INTO weekmenu_store_items (id, household_id, weekmenu_id, label, label_id, modified_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [newId(), hid, id, item.label.trim(), item.labelId, t, t],
           )
         }
       })
@@ -422,13 +464,12 @@ export function createRepo(householdId: string) {
      * de winkellijst (items die al op de lijst staan worden niet dubbel toegevoegd).
      * De boodschappenlijst volgt vanzelf, want die wordt uit de week uitgerekend.
      */
-    async applyWeekmenu(input: {
-      menuDays: MenuDay[]
-      weekStart: string
-      storeLabels: string[]
-      /** Label voor de items die op de lijst komen (bijvoorbeeld "Jumbo"). */
-      labelId?: string | null
-    }) {
+    /**
+     * Vult de week met een weekmenu. De items van het weekmenu gaan naar hun
+     * winkel: zonder label naar Picnic (extra voor deze week), anders op de Lijst.
+     * Wat er al staat, komt er niet dubbel bij.
+     */
+    async applyWeekmenu(input: { menuDays: MenuDay[]; weekStart: string; items: MenuItemInput[] }) {
       await db.writeTransaction(async (tx) => {
         const t = nowISO()
         for (const day of menuToWeek(input.menuDays, input.weekStart)) {
@@ -439,10 +480,26 @@ export function createRepo(householdId: string) {
           [hid],
         )
         const known = new Set(open.map((r) => normalizeName(r.label)))
-        for (const label of input.storeLabels) {
-          if (known.has(normalizeName(label))) continue
-          known.add(normalizeName(label))
-          await insertStoreItem(tx, label, t, input.labelId ?? null)
+        const extras = await tx.getAll<{ name: string }>(
+          `SELECT name FROM week_extras WHERE household_id = ? AND week_start = ? AND deleted_at IS NULL`,
+          [hid, input.weekStart],
+        )
+        const knownExtras = new Set(extras.map((r) => normalizeName(r.name)))
+        for (const item of input.items) {
+          const key = normalizeName(item.label)
+          if (item.labelId === null) {
+            // Picnic: als extra voor deze week.
+            if (knownExtras.has(key)) continue
+            knownExtras.add(key)
+            await tx.execute(
+              `INSERT INTO week_extras (id, household_id, week_start, name, modified_at, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+              [newId(), hid, input.weekStart, item.label.trim(), t, t],
+            )
+          } else {
+            if (known.has(key)) continue
+            known.add(key)
+            await insertStoreItem(tx, item.label, t, item.labelId === LIST_WITHOUT_LABEL ? null : item.labelId)
+          }
         }
       })
     },

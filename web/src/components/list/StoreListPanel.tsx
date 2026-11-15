@@ -21,6 +21,7 @@ import { arrangeList, positionAt, SORT_LABELS, type ListItem, type SortMode } fr
 import { describeError } from '../../lib/errors'
 import { canVibrate, prefersReducedMotion, tick } from '../../lib/haptics'
 import { notify } from '../toaster'
+import { FromWeekBlock } from './FromWeekBlock'
 import { ItemDetail } from './ItemDetail'
 import { LabelBadge, LabelIcon } from './LabelBadge'
 import { LabelSelect } from './LabelSelect'
@@ -260,9 +261,11 @@ export function StoreListPanel({ compact = false }: { compact?: boolean }) {
         </Flex>
       </form>
 
+      <FromWeekBlock labels={labels.data} filterLabelId={activeFilter} />
+
       {empty && (
         <Text color="fg.muted" fontSize="sm">
-          {activeFilter ? 'Geen items met dit label.' : 'De lijst is leeg. Typ hierboven wat je nodig hebt.'}
+          {activeFilter ? 'Geen eigen items met dit label.' : 'Nog geen eigen items. Typ hierboven wat je nodig hebt.'}
         </Text>
       )}
 

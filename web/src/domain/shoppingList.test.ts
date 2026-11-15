@@ -230,3 +230,60 @@ describe('formatLabel', () => {
     expect(formatLabel('zout', [{ amount: null, unit: '' }], [])).toBe('zout')
   })
 })
+
+describe('winkel per artikel: geen label = Picnic, met label = de Lijst', () => {
+  const kip = { id: 'i-kip', name: 'kipfilet', isPantry: false, labelId: 'jumbo' }
+  const bouillon = { id: 'i-bouillon', name: 'bouillon', isPantry: true, labelId: 'jumbo' }
+  const base = input({
+    days: [{ day: '2026-11-02', dishId: 'd-nasi' }],
+    dishIngredients: [
+      { dishId: 'd-nasi', ingredientId: 'i-ui', quantity: 2, unit: '' },
+      { dishId: 'd-nasi', ingredientId: 'i-kip', quantity: 300, unit: 'g' },
+      { dishId: 'd-nasi', ingredientId: 'i-bouillon', quantity: 1, unit: 'blokje' },
+    ],
+    ingredients: [ui, kip, bouillon],
+    generalItems: [
+      { id: 'g-koffie', name: 'koffie', isPantry: false },
+      { id: 'g-shampoo', name: 'shampoo', isPantry: false, labelId: 'kruidvat' },
+    ],
+    extras: [{ id: 'x-taart', name: 'taart' }],
+    labelIds: ['jumbo', 'kruidvat'],
+  })
+
+  it('verdeelt over Picnic en andere winkels (de matrix)', () => {
+    const list = buildShoppingList(base)
+    expect(list.picnic.map((l) => l.name)).toEqual(['koffie', 'taart', 'uien'])
+    expect(list.elsewhere.map((l) => [l.name, l.storeLabelId])).toEqual([
+      ['kipfilet', 'jumbo'],
+      ['shampoo', 'kruidvat'],
+    ])
+  })
+
+  it('huisvoorraad komt pas op een lijst als het op is, en dan bij de eigen winkel', () => {
+    expect(buildShoppingList(base).elsewhere.map((l) => l.name)).not.toContain('bouillon')
+    const missing = buildShoppingList({
+      ...base,
+      states: [{ refType: 'ingredient', refKey: 'bouillon', missing: true, checked: false }],
+    })
+    const line = missing.elsewhere.find((l) => l.name === 'bouillon')
+    expect(line?.storeLabelId).toBe('jumbo')
+    expect(missing.picnic.map((l) => l.name)).not.toContain('bouillon')
+  })
+
+  it('de vraag over huisvoorraad gaat over alle winkels', () => {
+    expect(buildShoppingList(base).prompt.forMenu.map((l) => l.name)).toEqual(['bouillon'])
+  })
+
+  it('een verwijderd of onbekend label telt als Picnic', () => {
+    const list = buildShoppingList({ ...base, labelIds: ['kruidvat'] })
+    expect(list.picnic.map((l) => l.name)).toContain('kipfilet')
+  })
+
+  it('extra voor deze week: afvinken via de eigen sleutel', () => {
+    const list = buildShoppingList({
+      ...base,
+      states: [{ refType: 'extra', refKey: 'x-taart', missing: false, checked: true }],
+    })
+    expect(list.picnic.find((l) => l.name === 'taart')?.checked).toBe(true)
+  })
+})

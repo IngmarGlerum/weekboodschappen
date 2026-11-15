@@ -6,9 +6,14 @@
  * De lijst wordt nooit opgeslagen: hij wordt steeds uitgerekend uit het
  * weekplan, de gerechten en de algemene boodschappen. Alleen de keuzes van de
  * gebruikers ("niet in huis", "afgevinkt") staan in de database.
+ *
+ * Elk artikel heeft een winkel (label). Geen label = Picnic. Wat Picnic is,
+ * staat op het scherm Boodschappen; wat een label heeft, komt op de Lijst
+ * (blok "Uit de week"). Huisvoorraad komt pas op een lijst als je zegt dat
+ * het op is; daarna bepaalt het label waar het heen gaat.
  */
 
-export type RefType = 'ingredient' | 'general'
+export type RefType = 'ingredient' | 'general' | 'extra'
 
 export interface Dish {
   id: string
@@ -20,6 +25,8 @@ export interface Ingredient {
   id: string
   name: string
   isPantry: boolean
+  /** Winkel; null (of onbekend) = Picnic. */
+  labelId?: string | null
 }
 
 export interface DishIngredient {
@@ -33,6 +40,14 @@ export interface GeneralItem {
   id: string
   name: string
   isPantry: boolean
+  /** Winkel; null (of onbekend) = Picnic. */
+  labelId?: string | null
+}
+
+/** Een losse Picnic-boodschap voor alleen deze week. */
+export interface WeekExtra {
+  id: string
+  name: string
 }
 
 export interface ListState {
@@ -72,11 +87,17 @@ export interface ListLine {
   checked: boolean
   /** Bijvoorbeeld "4 uien (stamppot, nasi)". */
   label: string
+  /** De winkel: null = Picnic, anders het id van het label (bijvoorbeeld "Jumbo"). */
+  storeLabelId: string | null
 }
 
 export interface ShoppingList {
-  /** Wat nu op de lijst staat. */
+  /** Alles wat deze week gekocht moet worden, van alle winkels. */
   lines: ListLine[]
+  /** Voor Picnic (geen label). */
+  picnic: ListLine[]
+  /** Voor andere winkels (met label); deze staan op de Lijst. */
+  elsewhere: ListLine[]
   /** Wat de afrondprompt "Ben je nog iets vergeten?" toont. */
   prompt: {
     /** "Huisvoorraad voor het weekmenu". */
@@ -93,6 +114,10 @@ export interface ShoppingListInput {
   ingredients: Ingredient[]
   generalItems: GeneralItem[]
   states: ListState[]
+  /** Losse Picnic-boodschappen voor alleen deze week. */
+  extras?: WeekExtra[]
+  /** Labels die bestaan; een artikel met een ander (verwijderd) label telt als Picnic. */
+  labelIds?: string[]
 }
 
 export const normalizeName = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -139,6 +164,7 @@ export function formatLabel(
 interface Group {
   name: string
   isPantry: boolean
+  labelId: string | null
   parts: Map<string, number | null>
   dishes: Map<string, DishUse>
 }
@@ -147,6 +173,9 @@ const stateKey = (t: RefType, k: string) => `${t}|${k}`
 const byName = (a: ListLine, b: ListLine) => a.name.localeCompare(b.name, 'nl')
 
 export function buildShoppingList(input: ShoppingListInput): ShoppingList {
+  const known = input.labelIds ? new Set(input.labelIds) : null
+  const storeOf = (labelId: string | null | undefined): string | null =>
+    labelId && (!known || known.has(labelId)) ? labelId : null
   const dishById = new Map(input.dishes.map((d) => [d.id, d]))
   const ingredientById = new Map(input.ingredients.map((i) => [i.id, i]))
   const linesOfDish = new Map<string, DishIngredient[]>()
@@ -174,10 +203,12 @@ export function buildShoppingList(input: ShoppingListInput): ShoppingList {
 
       let group = groups.get(key)
       if (!group) {
-        group = { name: ingredient.name.trim(), isPantry: false, parts: new Map(), dishes: new Map() }
+        group = { name: ingredient.name.trim(), isPantry: false, labelId: null, parts: new Map(), dishes: new Map() }
         groups.set(key, group)
       }
       group.isPantry = group.isPantry || ingredient.isPantry
+      // Twee ingrediënten met dezelfde naam: de eerste met een winkel bepaalt de winkel.
+      group.labelId = group.labelId ?? storeOf(ingredient.labelId)
 
       const unit = normalizeUnit(di.unit)
       if (di.quantity === null) {
@@ -210,6 +241,7 @@ export function buildShoppingList(input: ShoppingListInput): ShoppingList {
       missing: state?.missing ?? false,
       checked: state?.checked ?? false,
       label: formatLabel(g.name, parts, dishes, g.isPantry && (state?.missing ?? false)),
+      storeLabelId: g.labelId,
     }
   }
 
@@ -218,6 +250,16 @@ export function buildShoppingList(input: ShoppingListInput): ShoppingList {
     toLine('general', item.id, {
       name: item.name.trim(),
       isPantry: item.isPantry,
+      labelId: storeOf(item.labelId),
+      parts: new Map(),
+      dishes: new Map(),
+    }),
+  )
+  const extraLines = (input.extras ?? []).map((extra) =>
+    toLine('extra', extra.id, {
+      name: extra.name.trim(),
+      isPantry: false,
+      labelId: null,
       parts: new Map(),
       dishes: new Map(),
     }),
@@ -226,8 +268,11 @@ export function buildShoppingList(input: ShoppingListInput): ShoppingList {
   // Huisvoorraad staat niet op de lijst, tenzij je zei dat je het niet in huis hebt.
   const onList = (l: ListLine) => !l.isPantry || l.missing
 
+  const lines = [...ingredientLines, ...generalLines, ...extraLines].filter(onList).sort(byName)
   return {
-    lines: [...ingredientLines, ...generalLines].filter(onList).sort(byName),
+    lines,
+    picnic: lines.filter((l) => l.storeLabelId === null),
+    elsewhere: lines.filter((l) => l.storeLabelId !== null),
     prompt: {
       forMenu: ingredientLines.filter((l) => l.isPantry).sort(byName),
       other: generalLines.filter((l) => l.isPantry).sort(byName),
