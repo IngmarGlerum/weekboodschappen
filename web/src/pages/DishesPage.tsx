@@ -46,10 +46,13 @@ export default function DishesPage() {
 
       <Stack gap="2">
         {shown.map((dish) => (
-          <Card.Root key={dish.id} variant="outline" asChild>
+          <Card.Root key={dish.id} variant="outline" w="full" minW="0" overflow="hidden" asChild>
             <button type="button" onClick={() => navigate(`/gerechten/${dish.id}`)} style={{ textAlign: 'left' }}>
-              <Card.Body p="3">
-                <Text fontWeight="semibold">{dish.name}</Text>
+              {/* minW 0: zonder dit rekt een lange regel de kaart op in plaats van af te kappen met … */}
+              <Card.Body p="3" w="full" minW="0">
+                <Text fontWeight="semibold" truncate>
+                  {dish.name}
+                </Text>
                 <Text color="fg.muted" fontSize="sm" truncate>
                   {(summary.get(dish.id) ?? []).join(', ') || 'Geen ingrediënten'}
                 </Text>

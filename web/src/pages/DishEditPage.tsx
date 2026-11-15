@@ -135,7 +135,10 @@ export default function DishEditPage() {
 
       <Stack gap="3">
         <Heading size="md">Ingrediënten</Heading>
-        {lines.map((line) => (
+        {lines.map((line) => {
+          // Al gekozen in een andere regel: grijs en niet te kiezen.
+          const usedElsewhere = new Set(lines.filter((l) => l.key !== line.key && l.ingredientId).map((l) => l.ingredientId))
+          return (
           <Box key={line.key} borderWidth="1px" rounded="md" p="3" bg="bg">
             <Stack gap="2">
               <Flex gap="2" align="center">
@@ -150,8 +153,9 @@ export default function DishEditPage() {
                   >
                     <option value="">Kies een ingrediënt…</option>
                     {ingredients.data.map((i) => (
-                      <option key={i.id} value={i.id}>
+                      <option key={i.id} value={i.id} disabled={usedElsewhere.has(i.id)}>
                         {i.name}
+                        {usedElsewhere.has(i.id) ? ' (al toegevoegd)' : ''}
                       </option>
                     ))}
                     <option value="__new">＋ Nieuw ingrediënt…</option>
@@ -170,9 +174,11 @@ export default function DishEditPage() {
                 </IconButton>
               </Flex>
               {addingFor === line.key && (
-                <Flex gap="2">
+                <Flex gap="2" minW="0">
                   <Input
                     autoFocus
+                    flex="1"
+                    minW="0"
                     size="sm"
                     placeholder="Naam van het nieuwe ingrediënt"
                     value={newIngredient}
@@ -210,7 +216,8 @@ export default function DishEditPage() {
               </Flex>
             </Stack>
           </Box>
-        ))}
+          )
+        })}
         <datalist id="units">
           {UNITS.map((u) => (
             <option key={u} value={u} />
