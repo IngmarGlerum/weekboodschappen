@@ -2,6 +2,8 @@ import { Button, Card, Flex, Heading, Input, Stack, Text } from '@chakra-ui/reac
 import { useMemo, useState } from 'react'
 import { LuPlus } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
+import { useCurrentHousehold } from '../auth/HouseholdProvider'
+import { readDishDraft } from '../lib/dishDraft'
 import { useDishes, useDishIngredients, useIngredients } from '../data/hooks'
 import { normalizeName } from '../domain/shoppingList'
 
@@ -11,6 +13,8 @@ export default function DishesPage() {
   const lines = useDishIngredients()
   const ingredients = useIngredients()
   const [search, setSearch] = useState('')
+  const household = useCurrentHousehold()
+  const draft = readDishDraft({ householdId: household.id, dishId: 'nieuw' })
 
   const summary = useMemo(() => {
     const nameOf = new Map(ingredients.data.map((i) => [i.id, i.name]))
@@ -33,6 +37,24 @@ export default function DishesPage() {
           <LuPlus /> Nieuw gerecht
         </Button>
       </Flex>
+
+      {draft && (
+        <Card.Root variant="subtle" colorPalette="yellow" w="full" minW="0" asChild>
+          <button type="button" onClick={() => navigate('/gerechten/nieuw')} style={{ textAlign: 'left' }}>
+            <Card.Body p="3" w="full" minW="0">
+              <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" color="fg.muted">
+                Concept, nog niet opgeslagen
+              </Text>
+              <Text fontWeight="semibold" truncate>
+                {draft.name.trim() || 'Nieuw gerecht'}
+              </Text>
+              <Text fontSize="sm" color="fg.muted">
+                Tik om verder te gaan
+              </Text>
+            </Card.Body>
+          </button>
+        </Card.Root>
+      )}
 
       {dishes.data.length > 0 && (
         <Input placeholder="Zoek een gerecht" aria-label="Zoek een gerecht" value={search} onChange={(e) => setSearch(e.target.value)} />

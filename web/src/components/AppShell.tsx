@@ -1,5 +1,5 @@
 import { Box, Button, Flex, HStack, Heading, IconButton, Text, useBreakpointValue } from '@chakra-ui/react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LuCalendarDays, LuEllipsis, LuListTodo, LuMenu, LuShoppingCart, LuUtensils } from 'react-icons/lu'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useCurrentHousehold } from '../auth/HouseholdProvider'
@@ -34,6 +34,17 @@ export default function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const wide = useBreakpointValue({ base: false, lg: true }) ?? false
   const sideBySide = wide && location.pathname === '/'
+  // Gerechten onthoudt waar je was (bijvoorbeeld een half ingevuld gerecht),
+  // zodat je daar terugkomt na een uitstapje naar een andere tab.
+  const lastDishPath = useRef('/gerechten')
+  useEffect(() => {
+    if (location.pathname.startsWith('/gerechten')) lastDishPath.current = location.pathname
+  }, [location.pathname])
+  function go(to: string) {
+    if (to === '/gerechten' && !location.pathname.startsWith('/gerechten')) navigate(lastDishPath.current)
+    else navigate(to)
+  }
+
   // Op de telefoon: Week en Lijst als twee pagina's waartussen je veegt.
   const pagerIndex = location.pathname === '/' ? 0 : location.pathname.startsWith('/lijst') ? 1 : null
   const paged = !wide && pagerIndex !== null
@@ -155,7 +166,7 @@ export default function AppShell() {
                 gap="0.5"
                 color={active ? 'green.600' : 'fg.muted'}
                 aria-current={active ? 'page' : undefined}
-                onClick={() => navigate(to)}
+                onClick={() => go(to)}
               >
                 <Icon size={22} />
                 <Text fontSize="xs" fontWeight={active ? 'semibold' : 'normal'}>

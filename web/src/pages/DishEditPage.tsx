@@ -1,11 +1,14 @@
-import { Box, Button, Field, Flex, Heading, HStack, IconButton, Input, NativeSelect, Stack, Text } from '@chakra-ui/react'
+import { Box, Button, Field, Flex, Heading, HStack, IconButton, Input, Stack, Text } from '@chakra-ui/react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { LuArrowLeft, LuPlus, LuTrash2 } from 'react-icons/lu'
+import { LuArrowLeft, LuTrash2 } from 'react-icons/lu'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useCurrentHousehold } from '../auth/HouseholdProvider'
 import { AppDialog, ConfirmDialog } from '../components/ConfirmDialog'
+import { IngredientPicker } from '../components/IngredientPicker'
 import { notify } from '../components/toaster'
 import { useAllDishes, useDishIngredients, useIngredients } from '../data/hooks'
 import { useRepo, type DishUsage } from '../data/repo'
+import { clearDishDraft, readDishDraft, writeDishDraft } from '../lib/dishDraft'
 import { describeError } from '../lib/errors'
 
 interface Line {
@@ -17,6 +20,13 @@ interface Line {
 
 const UNITS = ['g', 'kg', 'ml', 'l', 'el', 'tl', 'blik', 'pak', 'zakje', 'bosje', 'teentje', 'snufje']
 const emptyLine = (): Line => ({ key: crypto.randomUUID(), ingredientId: '', quantity: '', unit: '' })
+
+/** Er staat altijd één lege regel onderaan, klaar voor het volgende ingrediënt. */
+function withEmptyLast(lines: Line[]): Line[] {
+  const filled = lines.filter((l, i) => l.ingredientId || i === lines.length - 1 || l.quantity || l.unit)
+  const last = filled[filled.length - 1]
+  return !last || last.ingredientId ? [...filled, emptyLine()] : filled
+}
 
 function parseQuantity(text: string): number | null {
   const value = Number.parseFloat(text.replace(',', '.'))
@@ -32,52 +42,91 @@ export default function DishEditPage() {
   const allDishes = useAllDishes()
   const existingLines = useDishIngredients(dishId)
 
-  const [name, setName] = useState('')
-  const [lines, setLines] = useState<Line[]>([emptyLine()])
-  const [newIngredient, setNewIngredient] = useState('')
-  const [addingFor, setAddingFor] = useState<string | null>(null)
+  const household = useCurrentHousehold()
+  const draftKey = { householdId: household.id, dishId: dishId ?? 'nieuw' }
+  // Een concept (nog niet opgeslagen) blijft bewaard als je van tab wisselt.
+  const [initialDraft] = useState(() => readDishDraft(draftKey))
+
+  const [name, setName] = useState(initialDraft?.name ?? '')
+  const [lines, setLines] = useState<Line[]>(() => withEmptyLast(initialDraft?.lines ?? []))
+  const [dirty, setDirty] = useState(initialDraft !== null)
   const [saving, setSaving] = useState(false)
   const [usage, setUsage] = useState<DishUsage | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const loaded = useRef(false)
+  const loaded = useRef(initialDraft !== null)
+  const [reload, setReload] = useState(0)
+  const pickers = useRef(new Map<string, HTMLInputElement>())
+  const quantities = useRef(new Map<string, HTMLInputElement>())
 
-  // Bij een bestaand gerecht: de velden één keer vullen zodra de gegevens er zijn.
+  // Bij een bestaand gerecht: de velden één keer vullen zodra de gegevens er zijn
+  // (behalve als er een concept was).
   const dish = allDishes.data.find((d) => d.id === dishId)
   useEffect(() => {
     if (!dishId || loaded.current || !dish || existingLines.isLoading) return
     loaded.current = true
     setName(dish.name)
     setLines(
-      existingLines.data.length > 0
-        ? existingLines.data.map((l) => ({
-            key: l.id,
-            ingredientId: l.ingredient_id,
-            quantity: l.quantity === null ? '' : String(l.quantity).replace('.', ','),
-            unit: l.unit ?? '',
-          }))
-        : [emptyLine()],
+      withEmptyLast(
+        existingLines.data.map((l) => ({
+          key: l.id,
+          ingredientId: l.ingredient_id,
+          quantity: l.quantity === null ? '' : String(l.quantity).replace('.', ','),
+          unit: l.unit ?? '',
+        })),
+      ),
     )
-  }, [dishId, dish, existingLines.data, existingLines.isLoading])
+  }, [dishId, dish, existingLines.data, existingLines.isLoading, reload])
 
-  const update = (key: string, patch: Partial<Line>) =>
-    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
-
-  function chooseIngredient(key: string, ingredientId: string) {
-    const unit = ingredients.data.find((i) => i.id === ingredientId)?.default_unit ?? ''
-    setLines((prev) =>
-      prev.map((l) => (l.key === key ? { ...l, ingredientId, unit: l.unit || unit } : l)),
+  // Concept bewaren bij elke wijziging door de gebruiker.
+  useEffect(() => {
+    if (!dirty) return
+    writeDishDraft(
+      { householdId: household.id, dishId: dishId ?? 'nieuw' },
+      { name, lines: lines.filter((l) => l.ingredientId || l.quantity || l.unit) },
     )
+  }, [dirty, name, lines, household.id, dishId])
+
+  /** Focus na de volgende weergave (het veld bestaat dan pas). */
+  function focusQuantity(key: string) {
+    requestAnimationFrame(() => quantities.current.get(key)?.focus())
   }
 
-  async function addIngredient(key: string) {
-    if (!newIngredient.trim()) return
+  const update = (key: string, patch: Partial<Line>) => {
+    setDirty(true)
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  }
+
+  function chooseIngredient(key: string, ingredientId: string, unitHint?: string) {
+    const unit = unitHint ?? ingredients.data.find((i) => i.id === ingredientId)?.default_unit ?? ''
+    setDirty(true)
+    setLines((prev) => withEmptyLast(prev.map((l) => (l.key === key ? { ...l, ingredientId, unit: l.unit || unit } : l))))
+    // Door naar de hoeveelheid; het toetsenbord blijft open.
+    focusQuantity(key)
+  }
+
+  async function createIngredient(key: string, ingredientName: string) {
     try {
-      const ingredientId = await repo.addIngredient({ name: newIngredient })
-      setNewIngredient('')
-      setAddingFor(null)
-      chooseIngredient(key, ingredientId)
+      const ingredientId = await repo.addIngredient({ name: ingredientName })
+      chooseIngredient(key, ingredientId, '')
     } catch (error) {
       notify.error('Ingrediënt toevoegen mislukt', describeError(error))
+    }
+  }
+
+  function removeLine(key: string) {
+    setDirty(true)
+    setLines((prev) => withEmptyLast(prev.filter((l) => l.key !== key)))
+  }
+
+  function discardDraft() {
+    clearDishDraft(draftKey)
+    setDirty(false)
+    setName('')
+    setLines([emptyLine()])
+    if (dishId) {
+      // Het effect hierboven vult de velden opnieuw uit de database.
+      loaded.current = false
+      setReload((n) => n + 1)
     }
   }
 
@@ -92,6 +141,8 @@ export default function DishEditPage() {
         name,
         lines: filled.map((l) => ({ ingredientId: l.ingredientId, quantity: parseQuantity(l.quantity), unit: l.unit })),
       })
+      clearDishDraft(draftKey)
+      setDirty(false)
       notify.success('Gerecht opgeslagen')
       navigate('/gerechten')
     } catch (error) {
@@ -113,6 +164,7 @@ export default function DishEditPage() {
     setUsage(null)
     setConfirmDelete(false)
     await repo.removeDish(dishId)
+    clearDishDraft(draftKey)
     notify.success('Gerecht verwijderd')
     navigate('/gerechten')
   }
@@ -130,92 +182,91 @@ export default function DishEditPage() {
 
       <Field.Root required>
         <Field.Label>Naam</Field.Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Bijvoorbeeld stamppot" />
+        <Input
+          value={name}
+          onChange={(e) => {
+            setDirty(true)
+            setName(e.target.value)
+          }}
+          placeholder="Bijvoorbeeld stamppot"
+        />
       </Field.Root>
+
+      {dirty && (
+        <HStack justify="space-between" bg="yellow.subtle" rounded="md" px="3" py="1.5" gap="2">
+          <Text fontSize="sm">Concept, nog niet opgeslagen</Text>
+          <Button type="button" size="xs" variant="ghost" onClick={discardDraft}>
+            Weggooien
+          </Button>
+        </HStack>
+      )}
 
       <Stack gap="3">
         <Heading size="md">Ingrediënten</Heading>
-        {lines.map((line) => {
+        {lines.map((line, index) => {
+          const isLast = index === lines.length - 1
           // Al gekozen in een andere regel: grijs en niet te kiezen.
           const usedElsewhere = new Set(lines.filter((l) => l.key !== line.key && l.ingredientId).map((l) => l.ingredientId))
           return (
-          <Box key={line.key} borderWidth="1px" rounded="md" p="3" bg="bg">
-            <Stack gap="2">
-              <Flex gap="2" align="center">
-                <NativeSelect.Root flex="1">
-                  <NativeSelect.Field
-                    aria-label="Ingrediënt"
+            <Box key={line.key} borderWidth="1px" borderStyle={isLast ? 'dashed' : 'solid'} rounded="md" p="3" bg="bg">
+              <Stack gap="2">
+                <Flex gap="2" align="center" minW="0">
+                  <IngredientPicker
+                    ref={(el) => {
+                      if (el) pickers.current.set(line.key, el)
+                      else pickers.current.delete(line.key)
+                    }}
+                    ingredients={ingredients.data}
+                    usedIds={usedElsewhere}
                     value={line.ingredientId}
-                    onChange={(e) => {
-                      if (e.target.value === '__new') setAddingFor(line.key)
-                      else chooseIngredient(line.key, e.target.value)
-                    }}
-                  >
-                    <option value="">Kies een ingrediënt…</option>
-                    {ingredients.data.map((i) => (
-                      <option key={i.id} value={i.id} disabled={usedElsewhere.has(i.id)}>
-                        {i.name}
-                        {usedElsewhere.has(i.id) ? ' (al toegevoegd)' : ''}
-                      </option>
-                    ))}
-                    <option value="__new">＋ Nieuw ingrediënt…</option>
-                  </NativeSelect.Field>
-                  <NativeSelect.Indicator />
-                </NativeSelect.Root>
-                <IconButton
-                  variant="ghost"
-                  colorPalette="red"
-                  aria-label="Haal ingrediënt weg"
-                  type="button"
-                  disabled={lines.length === 1 && !line.ingredientId}
-                  onClick={() => setLines((prev) => (prev.length === 1 ? [emptyLine()] : prev.filter((l) => l.key !== line.key)))}
-                >
-                  <LuTrash2 />
-                </IconButton>
-              </Flex>
-              {addingFor === line.key && (
-                <Flex gap="2" minW="0">
-                  <Input
-                    autoFocus
-                    flex="1"
-                    minW="0"
-                    size="sm"
-                    placeholder="Naam van het nieuwe ingrediënt"
-                    value={newIngredient}
-                    onChange={(e) => setNewIngredient(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        void addIngredient(line.key)
-                      }
-                    }}
+                    onChoose={(ingredientId) => chooseIngredient(line.key, ingredientId)}
+                    onCreate={(ingredientName) => void createIngredient(line.key, ingredientName)}
                   />
-                  <Button size="sm" type="button" colorPalette="green" onClick={() => addIngredient(line.key)}>
-                    Toevoegen
-                  </Button>
-                  <Button size="sm" type="button" variant="ghost" onClick={() => setAddingFor(null)}>
-                    Annuleren
-                  </Button>
+                  {!isLast && (
+                    <IconButton
+                      variant="ghost"
+                      colorPalette="red"
+                      aria-label="Haal ingrediënt weg"
+                      type="button"
+                      onClick={() => removeLine(line.key)}
+                    >
+                      <LuTrash2 />
+                    </IconButton>
+                  )}
                 </Flex>
-              )}
-              <Flex gap="2">
-                <Input
-                  aria-label="Hoeveelheid"
-                  inputMode="decimal"
-                  placeholder="Hoeveelheid"
-                  value={line.quantity}
-                  onChange={(e) => update(line.key, { quantity: e.target.value })}
-                />
-                <Input
-                  aria-label="Eenheid"
-                  placeholder="Eenheid (leeg = stuks)"
-                  list="units"
-                  value={line.unit}
-                  onChange={(e) => update(line.key, { unit: e.target.value })}
-                />
-              </Flex>
-            </Stack>
-          </Box>
+                {line.ingredientId && (
+                  <Flex gap="2">
+                    <Input
+                      ref={(el) => {
+                        if (el) quantities.current.set(line.key, el)
+                        else quantities.current.delete(line.key)
+                      }}
+                      aria-label="Hoeveelheid"
+                      inputMode="decimal"
+                      enterKeyHint="next"
+                      placeholder="Hoeveelheid"
+                      value={line.quantity}
+                      onChange={(e) => update(line.key, { quantity: e.target.value })}
+                    />
+                    <Input
+                      aria-label="Eenheid"
+                      placeholder="Eenheid (leeg = stuks)"
+                      list="units"
+                      enterKeyHint="next"
+                      value={line.unit}
+                      onChange={(e) => update(line.key, { unit: e.target.value })}
+                      onKeyDown={(e) => {
+                        // Enter: door naar het volgende (lege) ingrediënt.
+                        if (e.key !== 'Enter') return
+                        e.preventDefault()
+                        const next = lines[index + 1]
+                        if (next) pickers.current.get(next.key)?.focus()
+                      }}
+                    />
+                  </Flex>
+                )}
+              </Stack>
+            </Box>
           )
         })}
         <datalist id="units">
@@ -223,9 +274,6 @@ export default function DishEditPage() {
             <option key={u} value={u} />
           ))}
         </datalist>
-        <Button type="button" variant="outline" alignSelf="flex-start" onClick={() => setLines((prev) => [...prev, emptyLine()])}>
-          <LuPlus /> Ingrediënt toevoegen
-        </Button>
       </Stack>
 
       <HStack justify="space-between" mt="2">
