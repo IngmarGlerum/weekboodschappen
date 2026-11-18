@@ -71,7 +71,30 @@ Eén van jullie logt in en maakt een planning aan. Via het menu linksboven, *Naa
 e-mailadres van je partner in en krijg je een link (kopiëren of openen in je mail-app). De link werkt één keer en 7 dagen,
 en alleen als je partner inlogt met precies dat e-mailadres. De app verstuurt zelf geen e-mail.
 
-### 5. Picnic (versie 2)
+### 5. Automatisch bijwerken via GitHub (database en sync-regels)
+
+`.github/workflows/backend.yml` voert nieuwe migraties uit in Supabase en deployt de sync-regels naar
+PowerSync, zodat je dat niet meer met de hand hoeft te doen.
+
+- **Pull request**: alleen controleren (migraties testen op een lege Postgres, sync-regels inlezen).
+- **Merge naar `main`**: na jouw goedkeuring nieuwe migraties uitvoeren (`supabase db push`) en, als
+  `powersync/` veranderd is, de sync-regels deployen (`powersync deploy sync-config`).
+
+Eenmalig instellen:
+
+1. GitHub: *Settings > Environments > New environment* `production`, met *Required reviewers* (jezelf).
+2. Secrets in dat environment:
+   - `SUPABASE_DB_URL`: Supabase > *Connect* > **Session pooler**, met je databasewachtwoord ingevuld.
+   - `POWERSYNC_AUTH_TOKEN`: PowerSync-dashboard > *Account* > *Access tokens*.
+   - `POWERSYNC_INSTANCE_ID`: het id van je instance (staat in de adresbalk van het dashboard).
+3. Heb je migraties al met de hand uitgevoerd? Start de workflow één keer met de hand (*Actions >
+   Database en sync-regels > Run workflow*) en vul bij `al_uitgevoerd` die versienummers in, bijvoorbeeld
+   `20261102090000 20261104090000 20261114090000`. De workflow stopt met uitleg als je dit vergeet.
+
+Schrijf migraties zo dat de vorige versie van de app ermee blijft werken (vooral toevoegen, niets
+hernoemen of weghalen): Vercel zet de app online zonder op de goedkeuring van de database te wachten.
+
+### 6. Picnic (versie 2)
 
 Zie [`picnic-server/README.md`](picnic-server/README.md).
 
