@@ -87,6 +87,10 @@ Eenmalig instellen:
    - `SUPABASE_DB_URL`: Supabase > *Connect* > **Session pooler**, met je databasewachtwoord ingevuld.
    - `POWERSYNC_AUTH_TOKEN`: PowerSync-dashboard > *Account* > *Access tokens*.
    - `POWERSYNC_INSTANCE_ID`: het id van je instance (staat in de adresbalk van het dashboard).
+   - `POWERSYNC_PROJECT_ID` en `POWERSYNC_ORG_ID`: de id's van project en organisatie, ook uit de adresbalk.
+     Met deze twee erbij hoeft de CLI de instance niet eerst op te zoeken.
+
+   Spaties of een nieuwe regel aan het begin of eind van een secret worden vanzelf weggehaald.
 3. Heb je migraties al met de hand uitgevoerd? Start de workflow één keer met de hand (*Actions >
    Database en sync-regels > Run workflow*) en vul bij `al_uitgevoerd` die versienummers in, bijvoorbeeld
    `20261102090000 20261104090000 20261114090000`. De workflow stopt met uitleg als je dit vergeet.
