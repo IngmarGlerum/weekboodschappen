@@ -268,6 +268,27 @@ await expectError('een onbekend soort keuze wordt geweigerd',
   () => as(A, () => q(`insert into public.list_states (id, household_id, week_start, ref_type, ref_key) values ('st-y', $1, '2026-11-09', 'iets', 'x')`, [hid])),
   /check constraint|violates/)
 
+// --- Picnic-product per artikel -----------------------------------------------------------
+console.log('\nPicnic-product per artikel')
+const pid = `${hid}|ingredient|uien`
+await as(A, () => q(
+  `insert into public.picnic_products (id, household_id, ref_type, ref_key, product_id, product_name, unit_quantity, image_url, price_cents, modified_at)
+   values ($1, $2, 'ingredient', 'uien', 's1001', 'Picnic uien', '1 kg', 'https://storefront-prod.nl.picnicinternational.com/static/images/x/small.png', 129, $3)`,
+  [pid, hid, ago(5)]))
+const bSeesProduct = await as(B, async () => (await q(`select product_name from public.picnic_products`)).rows.map((r) => r.product_name))
+check('het andere lid ziet de gekozen Picnic-producten', bSeesProduct.join() === 'Picnic uien')
+const cSeesProduct = await as(C, async () => (await q(`select count(*)::int c from public.picnic_products`)).rows[0].c)
+check('een vreemde ziet ze niet', cSeesProduct === 0)
+await expectError('een ongeldig product-id wordt geweigerd',
+  () => as(A, () => q(`insert into public.picnic_products (id, household_id, ref_type, ref_key, product_id, product_name) values ('p2', $1, 'general', 'g', 'x y', 'x')`, [hid])),
+  /check constraint|violates/)
+await expectError('alleen https-plaatjes',
+  () => as(A, () => q(`insert into public.picnic_products (id, household_id, ref_type, ref_key, product_id, product_name, image_url) values ('p3', $1, 'general', 'g', 's1', 'x', 'javascript:alert(1)')`, [hid])),
+  /check constraint|violates/)
+await as(B, () => q(`update public.picnic_products set product_name = 'oud', modified_at = $1 where id = $2`, [ago(10), pid]))
+const pname = (await q(`select product_name from public.picnic_products where id = $1`, [pid])).rows[0].product_name
+check('ook hier wint de laatste wijziging', pname === 'Picnic uien')
+
 // --- Soft delete en weekmenu (requirement 12) ------------------------------------------
 console.log('\nWeekmenu en verwijderd gerecht (requirement 12)')
 await as(A, async () => {

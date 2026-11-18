@@ -20,7 +20,14 @@ import { useNavigate } from 'react-router-dom'
 import { AppDialog } from '../components/ConfirmDialog'
 import { useWeek } from '../components/weekContext'
 import { notify } from '../components/toaster'
-import { useGeneralItems, useShoppingList, useStoreLabels } from '../data/hooks'
+import { useGeneralItems, usePicnicProducts, useShoppingList, useStoreLabels } from '../data/hooks'
+import { useCurrentHousehold } from '../auth/HouseholdProvider'
+import { PicnicOrderDialog } from '../components/picnic/PicnicOrderDialog'
+import { ProductSearchDialog } from '../components/picnic/ProductSearchDialog'
+import { ProductThumb } from '../components/picnic/ProductThumb'
+import { productRef, productRowId } from '../domain/picnic'
+import { picnicConfigured } from '../lib/picnicApi'
+import type { PicnicProductRow } from '../data/rows'
 import { LabelBadge, PicnicBadge } from '../components/list/LabelBadge'
 import { LabelSelect } from '../components/list/LabelSelect'
 import { isOn, type StoreLabelRow } from '../data/rows'
@@ -41,6 +48,15 @@ export default function ShoppingPage() {
   const [newItem, setNewItem] = useState('')
   const [everyWeek, setEveryWeek] = useState(false)
   const [finishOpen, setFinishOpen] = useState(false)
+  const [orderOpen, setOrderOpen] = useState(false)
+  const [chooseFor, setChooseFor] = useState<ListLine | null>(null)
+  const household = useCurrentHousehold()
+  const picnicProducts = usePicnicProducts()
+  const withPicnic = picnicConfigured()
+  const productOf = (line: ListLine): PicnicProductRow | undefined => {
+    const ref = productRef(line)
+    return picnicProducts.data.find((p) => p.id === productRowId(household.id, ref.refType, ref.refKey))
+  }
 
   // Dit scherm is de Picnic-lijst; artikelen met een andere winkel staan op de Lijst.
   const open = list.picnic.filter((l) => !l.checked)
@@ -131,7 +147,13 @@ export default function ShoppingPage() {
 
       <Stack gap="1" as="ul" listStyleType="none" m="0" p="0">
         {open.map((line) => (
-          <ListItem key={`${line.refType}|${line.refKey}`} line={line} weekStart={weekStart} />
+          <ListItem
+            key={`${line.refType}|${line.refKey}`}
+            line={line}
+            weekStart={weekStart}
+            product={withPicnic ? productOf(line) : undefined}
+            onChooseProduct={withPicnic ? () => setChooseFor(line) : undefined}
+          />
         ))}
       </Stack>
 
@@ -142,7 +164,13 @@ export default function ShoppingPage() {
           </Text>
           <Stack gap="1" as="ul" listStyleType="none" m="0" p="0">
             {done.map((line) => (
-              <ListItem key={`${line.refType}|${line.refKey}`} line={line} weekStart={weekStart} />
+              <ListItem
+            key={`${line.refType}|${line.refKey}`}
+            line={line}
+            weekStart={weekStart}
+            product={withPicnic ? productOf(line) : undefined}
+            onChooseProduct={withPicnic ? () => setChooseFor(line) : undefined}
+          />
             ))}
           </Stack>
         </Stack>
@@ -157,9 +185,14 @@ export default function ShoppingPage() {
       )}
 
       <HStack gap="2" flexWrap="wrap">
-        <Button colorPalette="green" onClick={() => setFinishOpen(true)}>
+        <Button colorPalette="green" variant={withPicnic ? 'outline' : 'solid'} onClick={() => setFinishOpen(true)}>
           Afronden
         </Button>
+        {withPicnic && (
+          <Button colorPalette="green" disabled={open.length === 0} onClick={() => setOrderOpen(true)}>
+            🚚 Naar Picnic
+          </Button>
+        )}
         <Button variant="outline" disabled={open.length === 0} onClick={copyOrShare}>
           <LuCopy /> Kopieer of deel lijst
         </Button>
@@ -223,14 +256,56 @@ export default function ShoppingPage() {
       </Collapsible.Root>
 
       <FinishDialog open={finishOpen} onClose={() => setFinishOpen(false)} weekStart={weekStart} />
+      {withPicnic && (
+        <>
+          <PicnicOrderDialog
+            open={orderOpen && chooseFor === null}
+            onClose={() => setOrderOpen(false)}
+            weekStart={weekStart}
+            lines={open}
+            onChooseProduct={(line) => setChooseFor(line)}
+          />
+          <ProductSearchDialog
+            open={chooseFor !== null}
+            articleName={chooseFor?.name ?? null}
+            onClose={() => setChooseFor(null)}
+            onChoose={(product) => {
+              const line = chooseFor
+              setChooseFor(null)
+              if (!line) return
+              void repo
+                .setPicnicProduct(productRef(line), {
+                  id: product.id,
+                  name: product.name,
+                  unitQuantity: product.unitQuantity || null,
+                  imageUrl: product.imageUrl,
+                  priceCents: product.priceCents,
+                })
+                .then(() => notify.success(`${line.name}: ${product.name}`))
+            }}
+          />
+        </>
+      )}
     </Stack>
   )
 }
 
-function ListItem({ line, weekStart }: { line: ListLine; weekStart: string }) {
+function ListItem({
+  line,
+  weekStart,
+  product,
+  onChooseProduct,
+}: {
+  line: ListLine
+  weekStart: string
+  /** Het gekozen Picnic-product (als de koppeling aan staat). */
+  product?: PicnicProductRow
+  /** Zonder: geen knop om een product te kiezen (koppeling uit, of afgevinkte regel). */
+  onChooseProduct?: () => void
+}) {
   const repo = useRepo()
   return (
-    <Flex as="li" align="center" gap="2" borderWidth="1px" rounded="md" bg="bg" px="3" py="2">
+    <Flex as="li" align="center" gap="2" borderWidth="1px" rounded="md" bg="bg" px="3" py="2" flexWrap="wrap">
       <Checkbox.Root
         colorPalette="green"
         flex="1"
@@ -260,6 +335,40 @@ function ListItem({ line, weekStart }: { line: ListLine; weekStart: string }) {
         <IconButton size="xs" variant="ghost" aria-label={`Haal ${line.name} weg`} onClick={() => void repo.removeWeekExtra(line.refKey)}>
           <LuX />
         </IconButton>
+      )}
+      {(product || onChooseProduct) && (
+        <Box w="full" pl="7">
+          {product ? (
+            <Box
+              asChild
+              display="flex"
+              alignItems="center"
+              gap="2"
+              textAlign="left"
+              w="full"
+              minW="0"
+              rounded="md"
+              _hover={onChooseProduct ? { bg: 'bg.muted' } : undefined}
+            >
+              <button
+                type="button"
+                aria-label={`Ander Picnic-product voor ${line.name}`}
+                disabled={!onChooseProduct}
+                onClick={onChooseProduct}
+              >
+                <ProductThumb url={product.image_url} size={28} />
+                <Text fontSize="xs" color="fg.muted" truncate>
+                  {product.product_name}
+                  {product.unit_quantity ? ` · ${product.unit_quantity}` : ''}
+                </Text>
+              </button>
+            </Box>
+          ) : (
+            <Button size="xs" variant="ghost" colorPalette="green" px="1" onClick={onChooseProduct}>
+              Kies Picnic-product
+            </Button>
+          )}
+        </Box>
       )}
     </Flex>
   )

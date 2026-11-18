@@ -52,7 +52,7 @@ export function createApp(deps: Deps) {
     '*',
     cors({
       origin: (origin) => (deps.config.allowedOrigins.includes(origin) ? origin : null),
-      allowHeaders: ['Authorization', 'Content-Type'],
+      allowHeaders: ['Authorization', 'Content-Type', 'X-Household-Id'],
       allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
       maxAge: 600,
     }),
@@ -63,7 +63,7 @@ export function createApp(deps: Deps) {
 
   // Alles onder /picnic vereist een geldige Supabase-sessie van een huishoudenslid.
   app.use('/picnic/*', async (c, next) => {
-    const identity = await auth.authenticate(c.req.header('Authorization'))
+    const identity = await auth.authenticate(c.req.header('Authorization'), c.req.header('X-Household-Id'))
     c.set('householdId', identity.householdId)
     c.set('userId', identity.userId)
     await next()

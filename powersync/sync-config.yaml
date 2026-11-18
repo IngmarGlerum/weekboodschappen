@@ -47,6 +47,10 @@ streams:
     auto_subscribe: true
     query: SELECT * FROM week_extras WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
 
+  picnic_products:
+    auto_subscribe: true
+    query: SELECT * FROM picnic_products WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
   list_states:
     auto_subscribe: true
     query: SELECT * FROM list_states WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())

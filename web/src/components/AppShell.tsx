@@ -21,7 +21,7 @@ const NAV = [
     to: '/meer',
     label: 'Meer',
     icon: LuEllipsis,
-    match: (p: string) => ['/meer', '/ingredienten', '/weekmenus', '/planning'].some((x) => p.startsWith(x)),
+    match: (p: string) => ['/meer', '/ingredienten', '/weekmenus', '/planning', '/picnic'].some((x) => p.startsWith(x)),
   },
 ]
 

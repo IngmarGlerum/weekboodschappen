@@ -3,6 +3,7 @@ import { useCurrentHousehold } from '../auth/HouseholdProvider'
 import { todayISO } from '../domain/dates'
 import { normalizeName, type PlannedDay, type RefType } from '../domain/shoppingList'
 import { menuToWeek, weekToMenu, type MenuDay } from '../domain/weekmenu'
+import { productRowId } from '../domain/picnic'
 import { db } from '../powersync/db'
 
 /**
@@ -246,6 +247,37 @@ export function createRepo(householdId: string) {
     },
 
     removeWeekExtra: (id: string) => softDelete('week_extras', id),
+
+    // --- Picnic: welk product hoort bij een artikel ---------------------
+    async setPicnicProduct(
+      ref: { refType: RefType; refKey: string },
+      product: { id: string; name: string; unitQuantity: string | null; imageUrl: string | null; priceCents: number | null },
+    ) {
+      const t = nowISO()
+      await db.execute(
+        `INSERT OR REPLACE INTO picnic_products
+           (id, household_id, ref_type, ref_key, product_id, product_name, unit_quantity, image_url, price_cents,
+            modified_at, created_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+        [
+          productRowId(hid, ref.refType, ref.refKey),
+          hid,
+          ref.refType,
+          ref.refKey,
+          product.id,
+          product.name,
+          product.unitQuantity,
+          product.imageUrl,
+          product.priceCents,
+          t,
+          t,
+        ],
+      )
+    },
+
+    async clearPicnicProduct(ref: { refType: RefType; refKey: string }) {
+      await softDelete('picnic_products', productRowId(hid, ref.refType, ref.refKey))
+    },
 
     // --- Keuzes bij de boodschappenlijst (requirement 4 en 6) -----------
     /** Zet "niet in huis" en/of "afgevinkt" voor één regel van één week. */

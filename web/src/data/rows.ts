@@ -39,6 +39,17 @@ export interface GeneralItemRow {
   label_id: string | null
 }
 
+export interface PicnicProductRow {
+  id: string
+  ref_type: 'ingredient' | 'general' | 'extra'
+  ref_key: string
+  product_id: string
+  product_name: string
+  unit_quantity: string | null
+  image_url: string | null
+  price_cents: number | null
+}
+
 export interface WeekExtraRow {
   id: string
   name: string
