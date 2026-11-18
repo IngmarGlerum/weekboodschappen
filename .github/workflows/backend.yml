@@ -57,9 +57,9 @@ jobs:
     name: Controle (wijzigt niets)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -89,7 +89,7 @@ jobs:
       RAW_PROJECT_ID: ${{ secrets.POWERSYNC_PROJECT_ID }}
       RAW_ORG_ID: ${{ secrets.POWERSYNC_ORG_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -170,7 +170,7 @@ jobs:
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         if: steps.sync.outputs.deploy == 'true'
         with:
           node-version: 22
