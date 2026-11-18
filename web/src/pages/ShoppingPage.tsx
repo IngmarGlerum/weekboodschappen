@@ -15,12 +15,17 @@ import {
   Text,
 } from '@chakra-ui/react'
 import { useState, type FormEvent } from 'react'
-import { LuChevronDown, LuChevronLeft, LuChevronRight, LuCopy, LuTrash2 } from 'react-icons/lu'
+import { LuArrowRight, LuChevronDown, LuChevronLeft, LuChevronRight, LuCopy, LuTrash2, LuX } from 'react-icons/lu'
+import { useNavigate } from 'react-router-dom'
 import { AppDialog } from '../components/ConfirmDialog'
 import { useWeek } from '../components/weekContext'
 import { notify } from '../components/toaster'
-import { useGeneralItems, useShoppingList } from '../data/hooks'
-import { isOn } from '../data/rows'
+import { useGeneralItems, useShoppingList, useStoreLabels } from '../data/hooks'
+import { LabelBadge, PicnicBadge } from '../components/list/LabelBadge'
+import { LabelSelect } from '../components/list/LabelSelect'
+import { isOn, type StoreLabelRow } from '../data/rows'
+
+const labelById = (labels: StoreLabelRow[], id: string) => labels.find((l) => l.id === id)
 import { useRepo } from '../data/repo'
 import { addDays, formatDayMonth, isoWeekNumber } from '../domain/dates'
 import { formatLabel, shoppingListToText, type ListLine } from '../domain/shoppingList'
@@ -31,17 +36,23 @@ export default function ShoppingPage() {
   const repo = useRepo()
   const { list, isLoading } = useShoppingList(weekStart)
   const general = useGeneralItems()
+  const labels = useStoreLabels()
+  const navigate = useNavigate()
   const [newItem, setNewItem] = useState('')
+  const [everyWeek, setEveryWeek] = useState(false)
   const [finishOpen, setFinishOpen] = useState(false)
 
-  const open = list.lines.filter((l) => !l.checked)
-  const done = list.lines.filter((l) => l.checked)
+  // Dit scherm is de Picnic-lijst; artikelen met een andere winkel staan op de Lijst.
+  const open = list.picnic.filter((l) => !l.checked)
+  const done = list.picnic.filter((l) => l.checked)
+  const elsewhereOpen = list.elsewhere.filter((l) => !l.checked).length
 
-  async function addGeneral(e: FormEvent) {
+  async function addItem(e: FormEvent) {
     e.preventDefault()
     if (!newItem.trim()) return
     try {
-      await repo.addGeneralItem(newItem)
+      if (everyWeek) await repo.addGeneralItem(newItem)
+      else await repo.addWeekExtra(weekStart, newItem)
       setNewItem('')
     } catch (error) {
       notify.error('Toevoegen mislukt', describeError(error))
@@ -49,7 +60,7 @@ export default function ShoppingPage() {
   }
 
   async function copyOrShare() {
-    const text = shoppingListToText(list.lines)
+    const text = shoppingListToText(list.picnic)
     if (!text) return
     try {
       if (typeof navigator.share === 'function') {
@@ -72,7 +83,10 @@ export default function ShoppingPage() {
           <LuChevronLeft />
         </IconButton>
         <Box textAlign="center">
-          <Heading size="lg">Boodschappen</Heading>
+          <HStack gap="2" justify="center">
+            <Heading size="lg">Boodschappen</Heading>
+            <PicnicBadge />
+          </HStack>
           <Text color="fg.muted" fontSize="sm">
             Week {isoWeekNumber(weekStart)} · {formatDayMonth(weekStart)} – {formatDayMonth(addDays(weekStart, 6))}
           </Text>
@@ -82,12 +96,12 @@ export default function ShoppingPage() {
         </IconButton>
       </Flex>
 
-      <form onSubmit={addGeneral}>
+      <form onSubmit={addItem}>
         <Field.Root>
-          <Field.Label>Algemene boodschap toevoegen</Field.Label>
+          <Field.Label>Boodschap toevoegen</Field.Label>
           <Flex gap="2" w="full">
             <Input
-              placeholder="Bijvoorbeeld wc-papier"
+              placeholder={everyWeek ? 'Bijvoorbeeld wc-papier' : 'Bijvoorbeeld een taart'}
               value={newItem}
               onChange={(e) => setNewItem(e.target.value)}
             />
@@ -95,13 +109,23 @@ export default function ShoppingPage() {
               Toevoegen
             </Button>
           </Flex>
-          <Field.HelperText>Staat elke week op de lijst, tot je het weghaalt of als huisvoorraad markeert.</Field.HelperText>
         </Field.Root>
+        {/* Buiten Field.Root: anders koppelt het veld zijn id aan deze schakelaar en doet een tik niets. */}
+        <Switch.Root size="sm" colorPalette="green" checked={everyWeek} onCheckedChange={(e) => setEveryWeek(e.checked)} mt="2">
+          <Switch.HiddenInput />
+          <Switch.Control />
+          <Switch.Label>Elke week (vaste boodschap)</Switch.Label>
+        </Switch.Root>
+        <Text color="fg.muted" fontSize="xs" mt="1">
+          {everyWeek
+            ? 'Staat elke week op de lijst, tot je het weghaalt of als huisvoorraad markeert.'
+            : 'Alleen voor deze week. Iets voor een andere winkel? Zet het op de Lijst.'}
+        </Text>
       </form>
 
-      {list.lines.length === 0 && !isLoading && (
+      {list.picnic.length === 0 && !isLoading && (
         <Text color="fg.muted">
-          Er staat niets op de lijst. Plan gerechten in de week, of voeg hierboven een algemene boodschap toe.
+          Er staat niets op de Picnic-lijst. Plan gerechten in de week, of voeg hierboven een boodschap toe.
         </Text>
       )}
 
@@ -124,6 +148,14 @@ export default function ShoppingPage() {
         </Stack>
       )}
 
+      {elsewhereOpen > 0 && (
+        <Button variant="subtle" justifyContent="space-between" onClick={() => navigate('/lijst')}>
+          {elsewhereOpen === 1 ? '1 artikel voor een andere winkel staat' : `${elsewhereOpen} artikelen voor andere winkels staan`} op de
+          Lijst
+          <LuArrowRight />
+        </Button>
+      )}
+
       <HStack gap="2" flexWrap="wrap">
         <Button colorPalette="green" onClick={() => setFinishOpen(true)}>
           Afronden
@@ -136,16 +168,34 @@ export default function ShoppingPage() {
       <Collapsible.Root>
         <Collapsible.Trigger asChild>
           <Button variant="ghost" size="sm" alignSelf="flex-start">
-            Algemene boodschappen beheren <LuChevronDown />
+            Vaste boodschappen beheren <LuChevronDown />
           </Button>
         </Collapsible.Trigger>
         <Collapsible.Content>
           <Stack gap="2" pt="2">
-            {general.data.length === 0 && <Text color="fg.muted">Nog geen algemene boodschappen.</Text>}
+            {general.data.length === 0 && <Text color="fg.muted">Nog geen vaste boodschappen.</Text>}
             {general.data.map((item) => (
-              <Flex key={item.id} align="center" justify="space-between" gap="3" borderWidth="1px" rounded="md" p="2" bg="bg">
-                <Text truncate>{item.name}</Text>
+              <Flex
+                key={item.id}
+                align="center"
+                justify="space-between"
+                gap="2"
+                flexWrap="wrap"
+                borderWidth="1px"
+                rounded="md"
+                p="2"
+                bg="bg"
+              >
+                <Text truncate flex="1" minW="100px">
+                  {item.name}
+                </Text>
                 <HStack gap="2">
+                  <LabelSelect
+                    labels={labels.data}
+                    value={item.label_id}
+                    empty="picnic"
+                    onChange={(labelId) => void repo.setGeneralLabel(item.id, labelId)}
+                  />
                   <Switch.Root
                     size="sm"
                     colorPalette="green"
@@ -180,10 +230,11 @@ export default function ShoppingPage() {
 function ListItem({ line, weekStart }: { line: ListLine; weekStart: string }) {
   const repo = useRepo()
   return (
-    <Box as="li" borderWidth="1px" rounded="md" bg="bg" px="3" py="2">
+    <Flex as="li" align="center" gap="2" borderWidth="1px" rounded="md" bg="bg" px="3" py="2">
       <Checkbox.Root
         colorPalette="green"
-        w="full"
+        flex="1"
+        minW="0"
         checked={line.checked}
         onCheckedChange={(e) =>
           repo.patchListState(weekStart, line.refType, line.refKey, { checked: e.checked === true })
@@ -197,9 +248,20 @@ function ListItem({ line, weekStart }: { line: ListLine; weekStart: string }) {
           color={line.checked ? 'fg.subtle' : undefined}
         >
           {line.label}
+          {line.refType === 'extra' && (
+            <Text as="span" color="fg.muted" fontSize="xs">
+              {' '}
+              · deze week
+            </Text>
+          )}
         </Checkbox.Label>
       </Checkbox.Root>
-    </Box>
+      {line.refType === 'extra' && (
+        <IconButton size="xs" variant="ghost" aria-label={`Haal ${line.name} weg`} onClick={() => void repo.removeWeekExtra(line.refKey)}>
+          <LuX />
+        </IconButton>
+      )}
+    </Flex>
   )
 }
 
@@ -207,6 +269,7 @@ function ListItem({ line, weekStart }: { line: ListLine; weekStart: string }) {
 function FinishDialog({ open, onClose, weekStart }: { open: boolean; onClose: () => void; weekStart: string }) {
   const repo = useRepo()
   const { list } = useShoppingList(weekStart)
+  const labels = useStoreLabels()
   const { forMenu, other } = list.prompt
   const empty = forMenu.length === 0 && other.length === 0
 
@@ -230,15 +293,25 @@ function FinishDialog({ open, onClose, weekStart }: { open: boolean; onClose: ()
         )}
         {!empty && (
           <Text color="fg.muted" fontSize="sm">
-            Vink aan wat je niet in huis hebt. Dat komt dan op de boodschappenlijst.
+            Vink aan wat je niet in huis hebt. Dat komt dan op de Picnic-lijst, of op de Lijst als het van een andere
+            winkel komt.
           </Text>
         )}
 
         {forMenu.length > 0 && (
-          <PromptBlock title="Huisvoorraad voor het weekmenu" lines={forMenu} weekStart={weekStart} repo={repo} showDishes />
+          <PromptBlock
+            title="Huisvoorraad voor het weekmenu"
+            lines={forMenu}
+            weekStart={weekStart}
+            repo={repo}
+            labels={labels.data}
+            showDishes
+          />
         )}
         {forMenu.length > 0 && other.length > 0 && <Separator />}
-        {other.length > 0 && <PromptBlock title="Andere huisvoorraad" lines={other} weekStart={weekStart} repo={repo} />}
+        {other.length > 0 && (
+          <PromptBlock title="Andere huisvoorraad" lines={other} weekStart={weekStart} repo={repo} labels={labels.data} />
+        )}
       </Stack>
     </AppDialog>
   )
@@ -249,12 +322,14 @@ function PromptBlock({
   lines,
   weekStart,
   repo,
+  labels,
   showDishes,
 }: {
   title: string
   lines: ListLine[]
   weekStart: string
   repo: ReturnType<typeof useRepo>
+  labels: StoreLabelRow[]
   showDishes?: boolean
 }) {
   return (
@@ -283,6 +358,11 @@ function PromptBlock({
               {' '}
               · niet in huis
             </Text>
+            {line.storeLabelId && labelById(labels, line.storeLabelId) && (
+              <Box as="span" display="inline-flex" ml="1.5" verticalAlign="middle">
+                <LabelBadge label={labelById(labels, line.storeLabelId) as StoreLabelRow} />
+              </Box>
+            )}
           </Checkbox.Label>
         </Checkbox.Root>
       ))}

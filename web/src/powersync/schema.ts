@@ -27,6 +27,8 @@ export const AppSchema = new Schema({
     name: column.text,
     default_unit: column.text,
     is_pantry: column.integer,
+    // Winkel; leeg = Picnic.
+    label_id: column.text,
   }),
 
   dishes: new Table({
@@ -58,7 +60,18 @@ export const AppSchema = new Schema({
     ...common,
     name: column.text,
     is_pantry: column.integer,
+    label_id: column.text,
   }),
+
+  // Losse Picnic-boodschappen voor één week.
+  week_extras: new Table(
+    {
+      ...common,
+      week_start: column.text,
+      name: column.text,
+    },
+    { indexes: { week: ['week_start'] } },
+  ),
 
   // `label` is de tekst van het item; het label ("Jumbo") is `label_id`.
   store_items: new Table({
@@ -111,6 +124,7 @@ export const AppSchema = new Schema({
       ...common,
       weekmenu_id: column.text,
       label: column.text,
+      label_id: column.text,
     },
     { indexes: { menu: ['weekmenu_id'] } },
   ),

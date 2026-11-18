@@ -7,7 +7,8 @@ import { useWeek } from '../components/weekContext'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { DishPickerDialog } from '../components/DishPickerDialog'
 import { notify } from '../components/toaster'
-import { useAllDishes, useWeekmenuDays, useWeekmenuStoreItems, useWeekmenus } from '../data/hooks'
+import { LabelSelect } from '../components/list/LabelSelect'
+import { useAllDishes, useStoreLabels, useWeekmenuDays, useWeekmenuStoreItems, useWeekmenus } from '../data/hooks'
 import { useRepo } from '../data/repo'
 import { weekdayName } from '../domain/dates'
 import { describeError } from '../lib/errors'
@@ -26,6 +27,8 @@ export default function WeekmenuEditPage() {
   const [name, setName] = useState('')
   const [pickerDay, setPickerDay] = useState<number | null>(null)
   const [newLabel, setNewLabel] = useState('')
+  const [newLabelId, setNewLabelId] = useState<string | null>(null)
+  const labels = useStoreLabels()
   const [applyOpen, setApplyOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
@@ -65,7 +68,7 @@ export default function WeekmenuEditPage() {
   async function addLabel(e: FormEvent) {
     e.preventDefault()
     if (!newLabel.trim()) return
-    await repo.addWeekmenuStoreItem(id, newLabel)
+    await repo.addWeekmenuStoreItem(id, newLabel, newLabelId)
     setNewLabel('')
   }
 
@@ -141,13 +144,23 @@ export default function WeekmenuEditPage() {
       </Stack>
 
       <Stack gap="2">
-        <Heading size="md">Items voor de lijst bij dit weekmenu</Heading>
+        <Heading size="md">Boodschappen bij dit weekmenu</Heading>
         <Text color="fg.muted" fontSize="sm">
-          Items voor de andere supermarkt die je mee wilt nemen wanneer je dit weekmenu gebruikt.
+          Losse boodschappen die meekomen als je dit weekmenu gebruikt. Picnic-items komen bij de boodschappen van die
+          week, items met een andere winkel op de Lijst.
         </Text>
         {storeItems.map((item) => (
-          <Flex key={item.id} align="center" justify="space-between" borderWidth="1px" rounded="md" bg="bg" px="3" py="2">
-            <Text>{item.label}</Text>
+          <Flex key={item.id} align="center" justify="space-between" gap="2" borderWidth="1px" rounded="md" bg="bg" px="3" py="2">
+            <Text flex="1" minW="0" truncate>
+              {item.label}
+            </Text>
+            <LabelSelect
+              labels={labels.data}
+              value={item.label_id}
+              empty="picnic"
+              withListOption
+              onChange={(labelId) => void repo.setWeekmenuStoreItemLabel(item.id, labelId)}
+            />
             <IconButton
               size="sm"
               variant="ghost"
@@ -167,6 +180,7 @@ export default function WeekmenuEditPage() {
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
             />
+            <LabelSelect labels={labels.data} value={newLabelId} empty="picnic" withListOption onChange={setNewLabelId} />
             <Button type="submit" variant="outline" disabled={!newLabel.trim()}>
               Toevoegen
             </Button>

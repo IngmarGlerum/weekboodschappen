@@ -7,3 +7,6 @@ dist
 .DS_Store
 *.tsbuildinfo
 picnic-server/data
+
+# Supabase CLI
+supabase/.temp/

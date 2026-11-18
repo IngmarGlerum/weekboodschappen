@@ -7,6 +7,8 @@ export interface IngredientRow {
   name: string
   default_unit: string | null
   is_pantry: number | null
+  /** Winkel; null = Picnic. */
+  label_id: string | null
 }
 
 export interface DishRow {
@@ -33,6 +35,13 @@ export interface GeneralItemRow {
   id: string
   name: string
   is_pantry: number | null
+  /** Winkel; null = Picnic. */
+  label_id: string | null
+}
+
+export interface WeekExtraRow {
+  id: string
+  name: string
 }
 
 export interface StoreItemRow {
@@ -78,7 +87,10 @@ export interface WeekmenuDayRow {
 export interface WeekmenuStoreItemRow {
   id: string
   weekmenu_id: string
+  /** De tekst van het item. */
   label: string
+  /** Winkel; null = Picnic. */
+  label_id: string | null
 }
 
 export const isOn = (value: number | null | undefined): boolean => value === 1

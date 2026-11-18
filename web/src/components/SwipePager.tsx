@@ -118,7 +118,7 @@ export function SwipePager({ index, onIndexChange, panes }: Props) {
   }, [])
 
   return (
-    <Box ref={container} flex="1" minH="0" overflow="hidden" position="relative" touchAction="pan-y">
+    <Box ref={container} as="main" flex="1" minH="0" overflow="hidden" position="relative" touchAction="pan-y">
       <Box
         ref={track}
         display="flex"

@@ -1,0 +1,155 @@
+# Database (Supabase) en sync-regels (PowerSync) bijwerken vanuit GitHub.
+#
+# - Pull request: alleen controleren (migraties testen op een lege Postgres,
+#   sync-regels inlezen). Er wordt niets gewijzigd en er zijn geen secrets nodig.
+# - Merge naar main: na goedkeuring (GitHub Environment "production") de nieuwe
+#   migraties uitvoeren en, als powersync/ veranderd is, de sync-regels deployen.
+# - Handmatig starten (Actions > Database en sync-regels > Run workflow): hetzelfde,
+#   met de mogelijkheid om eenmalig migraties te registreren die je al met de hand
+#   in Supabase hebt uitgevoerd.
+#
+# Secrets in het environment "production":
+#   SUPABASE_DB_URL        verbindingsregel (Session pooler) met databasewachtwoord
+#   POWERSYNC_AUTH_TOKEN   PowerSync personal access token
+#   POWERSYNC_INSTANCE_ID  id van de PowerSync-instance
+
+name: Database en sync-regels
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'powersync/**'
+      - '.github/workflows/backend.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'powersync/**'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+    inputs:
+      al_uitgevoerd:
+        description: 'Eenmalig: versies van migraties die al met de hand zijn uitgevoerd, met spaties ertussen (bijv. 20261102090000 20261104090000)'
+        required: false
+        default: ''
+      sync_regels_altijd:
+        description: 'Sync-regels ook deployen als powersync/ niet veranderd is'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Nooit twee uitrollen tegelijk.
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SUPABASE_CLI_VERSION: 2.122.1
+  POWERSYNC_CLI_VERSION: 0.10.3
+
+jobs:
+  controle:
+    name: Controle (wijzigt niets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Migraties testen op een lege Postgres (PGlite)
+        run: npm run test:sql
+
+      - name: Sync-regels inlezen
+        run: python3 -c "import yaml; c = yaml.safe_load(open('powersync/sync-config.yaml')); print(len(c['streams']), 'streams')"
+
+  uitrollen:
+    name: Uitrollen naar Supabase en PowerSync
+    if: github.event_name != 'pull_request'
+    needs: controle
+    runs-on: ubuntu-latest
+    # Wacht op goedkeuring als het environment "Required reviewers" heeft.
+    environment: production
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PS_ADMIN_TOKEN: ${{ secrets.POWERSYNC_AUTH_TOKEN }}
+      INSTANCE_ID: ${{ secrets.POWERSYNC_INSTANCE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secrets aanwezig?
+        run: |
+          missing=0
+          for name in SUPABASE_DB_URL PS_ADMIN_TOKEN INSTANCE_ID; do
+            if [ -z "${!name}" ]; then echo "::error::Secret voor $name ontbreekt in het environment 'production'."; missing=1; fi
+          done
+          exit $missing
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Eenmalig - al uitgevoerde migraties registreren
+        if: github.event_name == 'workflow_dispatch' && inputs.al_uitgevoerd != ''
+        env:
+          AL_UITGEVOERD: ${{ inputs.al_uitgevoerd }}
+        run: |
+          # Alleen versienummers (14 cijfers) toestaan.
+          for v in $AL_UITGEVOERD; do
+            [[ "$v" =~ ^[0-9]{14}$ ]] || { echo "::error::'$v' is geen versienummer van een migratie."; exit 1; }
+          done
+          supabase migration repair --status applied $AL_UITGEVOERD --db-url "$SUPABASE_DB_URL"
+
+      - name: Veiligheidscheck
+        run: |
+          # Bestaan de tabellen al, maar is er nog geen enkele migratie geregistreerd? Dan zou
+          # db push alles opnieuw proberen. Stop en leg uit wat te doen.
+          history=$(psql "$SUPABASE_DB_URL" -tAc "select count(*) from supabase_migrations.schema_migrations" 2>/dev/null || echo 0)
+          tables=$(psql "$SUPABASE_DB_URL" -tAc "select count(*) from information_schema.tables where table_schema = 'public' and table_name = 'households'")
+          if [ "$tables" != "0" ] && [ "$history" = "0" ]; then
+            echo "::error::De database heeft al tabellen, maar Supabase weet niet welke migraties al zijn uitgevoerd. Start deze workflow met de hand en vul bij 'al_uitgevoerd' de versies in die je al met de hand hebt uitgevoerd."
+            exit 1
+          fi
+
+      - name: Welke migraties gaan mee
+        run: supabase db push --dry-run --db-url "$SUPABASE_DB_URL"
+
+      - name: Migraties uitvoeren
+        run: supabase db push --yes --db-url "$SUPABASE_DB_URL"
+
+      - name: Zijn de sync-regels veranderd?
+        id: sync
+        env:
+          BEFORE: ${{ github.event.before }}
+          ALTIJD: ${{ inputs.sync_regels_altijd }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "$ALTIJD" = "true" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$BEFORE" ] && git cat-file -e "$BEFORE" 2>/dev/null && git diff --quiet "$BEFORE" "$GITHUB_SHA" -- powersync/; then
+            echo "Geen wijziging in powersync/; sync-regels blijven zoals ze zijn."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.sync.outputs.deploy == 'true'
+        with:
+          node-version: 22
+
+      - name: Sync-regels controleren (wat verandert er)
+        if: steps.sync.outputs.deploy == 'true'
+        run: npx --yes "powersync@${POWERSYNC_CLI_VERSION}" deploy sync-config --dry-run
+
+      - name: Sync-regels deployen
+        if: steps.sync.outputs.deploy == 'true'
+        run: npx --yes "powersync@${POWERSYNC_CLI_VERSION}" deploy sync-config

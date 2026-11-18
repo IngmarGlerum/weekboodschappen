@@ -4,7 +4,8 @@ import { LuArrowLeft, LuTrash2 } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { notify } from '../components/toaster'
-import { useIngredients } from '../data/hooks'
+import { LabelSelect } from '../components/list/LabelSelect'
+import { useIngredients, useStoreLabels } from '../data/hooks'
 import { isOn, type IngredientRow } from '../data/rows'
 import { useRepo } from '../data/repo'
 import { describeError } from '../lib/errors'
@@ -13,6 +14,7 @@ export default function IngredientsPage() {
   const repo = useRepo()
   const navigate = useNavigate()
   const ingredients = useIngredients()
+  const labels = useStoreLabels()
   const [name, setName] = useState('')
   const [toDelete, setToDelete] = useState<IngredientRow | null>(null)
 
@@ -47,7 +49,8 @@ export default function IngredientsPage() {
 
       <Text color="fg.muted">
         Dit is jullie eigen lijst. Kies hieruit bij het maken van een gerecht, zodat "ui" en "uien" nooit
-        twee verschillende dingen worden. Huisvoorraad komt niet automatisch op de boodschappenlijst.
+        twee verschillende dingen worden. Elk ingrediënt komt van Picnic, tenzij je een andere winkel kiest: dan
+        komt het op de Lijst. Huisvoorraad komt alleen op een lijst als je zegt dat het op is.
       </Text>
 
       <form onSubmit={add}>
@@ -66,11 +69,17 @@ export default function IngredientsPage() {
         {ingredients.data.map((ingredient) => (
           <Card.Root key={ingredient.id} variant="outline">
             <Card.Body p="3">
-              <Flex align="center" justify="space-between" gap="3">
-                <Text fontWeight="medium" truncate>
+              <Flex align="center" justify="space-between" gap="3" flexWrap="wrap">
+                <Text fontWeight="medium" truncate flex="1" minW="120px">
                   {ingredient.name}
                 </Text>
-                <HStack gap="3">
+                <HStack gap="2">
+                  <LabelSelect
+                    labels={labels.data}
+                    value={ingredient.label_id}
+                    empty="picnic"
+                    onChange={(labelId) => void repo.setIngredientLabel(ingredient.id, labelId)}
+                  />
                   <Switch.Root
                     size="sm"
                     colorPalette="green"

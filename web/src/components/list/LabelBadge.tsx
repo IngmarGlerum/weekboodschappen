@@ -1,4 +1,5 @@
 import { Box, HStack, Image, Text } from '@chakra-ui/react'
+import { LIST_WITHOUT_LABEL } from '../../data/repo'
 import type { StoreLabelRow } from '../../data/rows'
 
 export const LABEL_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'cyan', 'purple', 'pink'] as const
@@ -21,6 +22,7 @@ export function LabelBadge({ label, size = 'sm' }: { label: StoreLabelRow; size?
   return (
     <HStack
       as="span"
+      display="inline-flex"
       gap="1"
       px="1.5"
       py="0.5"
@@ -37,4 +39,31 @@ export function LabelBadge({ label, size = 'sm' }: { label: StoreLabelRow; size?
       </Text>
     </HStack>
   )
+}
+
+/** Picnic is geen label dat je zelf maakt: het is wat een artikel zonder label krijgt. */
+export function PicnicBadge({ size = 'sm' }: { size?: 'sm' | 'md' }) {
+  return (
+    <HStack as="span" gap="1" px="1.5" py="0.5" rounded="full" bg="red.subtle" color="red.fg" flexShrink={0}>
+      <Box as="span" fontSize={size === 'sm' ? '12px' : '16px'} lineHeight="1" aria-hidden>
+        🚚
+      </Box>
+      <Text as="span" fontSize={size === 'sm' ? 'xs' : 'sm'} fontWeight="medium">
+        Picnic
+      </Text>
+    </HStack>
+  )
+}
+
+/** De winkel van een artikel: het label, of Picnic als er geen (bestaand) label is. */
+export function StoreBadge({ labels, labelId }: { labels: StoreLabelRow[]; labelId: string | null }) {
+  if (labelId === LIST_WITHOUT_LABEL) {
+    return (
+      <Text as="span" fontSize="xs" color="fg.muted" flexShrink={0}>
+        Lijst
+      </Text>
+    )
+  }
+  const label = labels.find((l) => l.id === labelId)
+  return label ? <LabelBadge label={label} /> : <PicnicBadge />
 }

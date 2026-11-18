@@ -246,6 +246,28 @@ await expectError('een kleur moet een eenvoudige naam zijn',
 await expectError('een labelnaam mag niet leeg zijn',
   () => as(A, () => q(`insert into public.store_labels (household_id, name) values ($1, '  ')`, [hid])), /check constraint|violates/)
 
+// --- Winkel per artikel en extra's voor deze week ---------------------------------------
+console.log('\nWinkel per artikel en extra voor deze week')
+await as(A, async () => {
+  await q(`update public.ingredients set label_id = 'l-jumbo', modified_at = now() where id = 'ing-ui'`)
+  await q(`insert into public.general_items (id, household_id, name, label_id) values ('g-jam', $1, 'jam', 'l-jumbo')`, [hid])
+  await q(`insert into public.week_extras (id, household_id, week_start, name) values ('x-taart', $1, '2026-11-09', 'taart')`, [hid])
+  await q(`insert into public.list_states (id, household_id, week_start, ref_type, ref_key, checked) values ('st-x', $1, '2026-11-09', 'extra', 'x-taart', true)`, [hid])
+})
+const ingLabel = (await q(`select label_id from public.ingredients where id = 'ing-ui'`)).rows[0].label_id
+check('een ingrediënt kan een winkel (label) hebben', ingLabel === 'l-jumbo')
+const genLabel = (await q(`select label_id from public.general_items where id = 'g-jam'`)).rows[0].label_id
+check('een vaste boodschap kan een winkel hebben', genLabel === 'l-jumbo')
+const bSeesExtra = await as(B, async () => (await q(`select name from public.week_extras`)).rows.map((r) => r.name))
+check('het andere lid ziet de extra voor deze week', bSeesExtra.join() === 'taart')
+const cSeesExtra = await as(C, async () => (await q(`select count(*)::int c from public.week_extras`)).rows[0].c)
+check('een vreemde ziet de extra niet', cSeesExtra === 0)
+const extraState = (await q(`select checked from public.list_states where id = 'st-x'`)).rows[0].checked
+check('afvinken werkt ook voor een extra', extraState === true)
+await expectError('een onbekend soort keuze wordt geweigerd',
+  () => as(A, () => q(`insert into public.list_states (id, household_id, week_start, ref_type, ref_key) values ('st-y', $1, '2026-11-09', 'iets', 'x')`, [hid])),
+  /check constraint|violates/)
+
 // --- Soft delete en weekmenu (requirement 12) ------------------------------------------
 console.log('\nWeekmenu en verwijderd gerecht (requirement 12)')
 await as(A, async () => {
