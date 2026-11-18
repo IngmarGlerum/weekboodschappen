@@ -1,6 +1,6 @@
 import { Box, Button, CloseButton, Collapsible, Drawer, HStack, Portal, Separator, Stack, Text } from '@chakra-ui/react'
 import { useState } from 'react'
-import { LuApple, LuBookmark, LuCheck, LuChevronDown, LuLogOut, LuPlus, LuSettings } from 'react-icons/lu'
+import { LuApple, LuBookmark, LuCheck, LuChevronDown, LuLogOut, LuPlus, LuSettings, LuTruck } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { useHousehold } from '../auth/HouseholdProvider'
@@ -133,6 +133,11 @@ export function SettingsDrawer({ open, onClose }: Props) {
                     <Button variant="ghost" justifyContent="flex-start" gap="3" px="2" onClick={() => go('/ingredienten')}>
                       <LuApple /> Ingrediënten
                     </Button>
+                    {online && (
+                      <Button variant="ghost" justifyContent="flex-start" gap="3" px="2" onClick={() => go('/picnic')}>
+                        <LuTruck /> Picnic koppelen
+                      </Button>
+                    )}
                   </Stack>
                 </Stack>
               </Drawer.Body>

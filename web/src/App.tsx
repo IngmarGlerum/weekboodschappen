@@ -11,6 +11,7 @@ import InvitePage from './pages/InvitePage'
 import LoginPage from './pages/LoginPage'
 import SetPasswordPage from './pages/SetPasswordPage'
 import MorePage from './pages/MorePage'
+import PicnicPage from './pages/PicnicPage'
 import ShoppingPage from './pages/ShoppingPage'
 import StartPage from './pages/StartPage'
 import StorePage from './pages/StorePage'
@@ -73,6 +74,7 @@ export default function App() {
             <Route path="weekmenus" element={<WeekmenusPage />} />
             <Route path="weekmenus/:id" element={<WeekmenuEditPage />} />
             <Route path="planning" element={<HouseholdPage />} />
+            <Route path="picnic" element={<PicnicPage />} />
             <Route path="huishouden" element={<Navigate to="/planning" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

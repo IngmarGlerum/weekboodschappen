@@ -8,15 +8,22 @@ export interface Identity {
 }
 
 export interface Authenticator {
-  authenticate(authorization: string | undefined): Promise<Identity>
+  /**
+   * @param householdId de gekozen planning (header X-Household-Id). Zonder: de eerste planning
+   *   van de gebruiker (voor oudere versies van de app).
+   */
+  authenticate(authorization: string | undefined, householdId?: string): Promise<Identity>
 }
+
+/** Planning-id's zijn uuid's in tekst; meer laten we niet door naar Supabase. */
+const HOUSEHOLD_ID = /^[A-Za-z0-9-]{1,64}$/
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
 /**
- * Controleert de inlogsessie van Supabase (de JWT die de web-app meestuurt) en zoekt het
- * huishouden van de gebruiker op. Het huishouden komt NOOIT uit het verzoek zelf: we vragen
- * het aan Supabase met de JWT van de gebruiker, dus de rijbeveiliging (RLS) beslist.
+ * Controleert de inlogsessie van Supabase (de JWT die de web-app meestuurt) en het huishouden
+ * (de planning). De app zegt welke planning hij bedoelt, maar of de gebruiker daar lid van is
+ * vragen we aan Supabase met de JWT van de gebruiker: de rijbeveiliging (RLS) beslist.
  */
 export function createSupabaseAuthenticator(
   config: Pick<Config, 'supabaseUrl' | 'supabaseAnonKey' | 'supabaseJwtSecret'>,
@@ -47,13 +54,20 @@ export function createSupabaseAuthenticator(
     }
   }
 
-  async function householdOf(userId: string, token: string): Promise<string> {
-    const hit = cache.get(`${userId}`)
+  async function householdOf(userId: string, token: string, requested?: string): Promise<string> {
+    if (requested !== undefined && !HOUSEHOLD_ID.test(requested)) {
+      throw new AuthError(403, 'not_a_member', 'Je bent geen lid van deze planning.')
+    }
+    const cacheKey = `${userId}|${requested ?? ''}`
+    const hit = cache.get(cacheKey)
     if (hit && hit.until > now()) return hit.householdId
 
+    const filter = requested
+      ? `&household_id=eq.${encodeURIComponent(requested)}&user_id=eq.${encodeURIComponent(userId)}`
+      : `&user_id=eq.${encodeURIComponent(userId)}`
     let response: Response
     try {
-      response = await fetchImpl(`${config.supabaseUrl}/rest/v1/household_members?select=household_id&limit=1`, {
+      response = await fetchImpl(`${config.supabaseUrl}/rest/v1/household_members?select=household_id${filter}&limit=1`, {
         headers: { apikey: config.supabaseAnonKey, Authorization: `Bearer ${token}` },
       })
     } catch {
@@ -62,18 +76,21 @@ export function createSupabaseAuthenticator(
     if (!response.ok) throw new AuthError(401, 'invalid_token', 'Je sessie is ongeldig of verlopen. Log opnieuw in.')
     const rows = (await response.json()) as Array<{ household_id: string }>
     const householdId = rows[0]?.household_id
-    if (!householdId) throw new AuthError(403, 'no_household', 'Dit account hoort nog bij geen huishouden.')
-    cache.set(userId, { householdId, until: now() + 60_000 })
+    if (!householdId) {
+      if (requested) throw new AuthError(403, 'not_a_member', 'Je bent geen lid van deze planning.')
+      throw new AuthError(403, 'no_household', 'Dit account hoort nog bij geen huishouden.')
+    }
+    cache.set(cacheKey, { householdId, until: now() + 60_000 })
     return householdId
   }
 
   return {
-    async authenticate(authorization) {
+    async authenticate(authorization, householdId) {
       const match = /^Bearer (.+)$/i.exec(authorization ?? '')
       if (!match) throw new AuthError(401, 'missing_token', 'Log eerst in.')
       const token = match[1]
       const userId = await verify(token)
-      return { userId, householdId: await householdOf(userId, token) }
+      return { userId, householdId: await householdOf(userId, token, householdId || undefined) }
     },
   }
 }

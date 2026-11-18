@@ -15,6 +15,8 @@ export interface ProductHit {
   /** Prijs in centen voor één stuk. */
   priceCents: number
   unavailable: boolean
+  /** Kleine productfoto (werkt zonder inloggen), of null. */
+  imageUrl: string | null
 }
 
 export interface CartLine {
@@ -116,6 +118,7 @@ export function createPicnicApiFactory(countryCode: 'NL' | 'DE' | 'FR'): PicnicA
                 unitQuantity: p.unitQuantity,
                 priceCents: p.displayPrice,
                 unavailable: p.isUnavailable,
+                imageUrl: p.imageId ? client.catalog.getImageUrl(p.imageId, 'small') : null,
               })
             }
           }

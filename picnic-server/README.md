@@ -69,8 +69,12 @@ npm run typecheck
 npm run dev         # herstart bij wijzigingen; vereist een ingevuld .env
 ```
 
-## Nog niet gedaan
+## Gebruik door de web-app
 
-- De web-app roept deze server nog niet aan. Dat is het volgende stuk: een "Naar Picnic"-scherm dat per
-  boodschappenregel een product laat kiezen (en die keuze onthoudt) en dan `cart/add` aanroept.
-- Productkeuzes per ingrediënt onthouden (bijvoorbeeld "uien = Picnic Uien 1 kg").
+- De app stuurt bij elk verzoek `Authorization: Bearer <Supabase-sessie>` en `X-Household-Id: <planning>`
+  mee. De server controleert bij Supabase (met de JWT van de gebruiker) dat die gebruiker lid is van die
+  planning. Zonder `X-Household-Id` wordt de eerste planning van de gebruiker gebruikt.
+- In de web-app: *Instellingen > Picnic koppelen*, op Boodschappen per artikel *Kies Picnic-product*
+  (de keuze staat in de tabel `picnic_products` en synchroniseert), en *Naar Picnic* met aantallen.
+- Zet in Vercel `VITE_PICNIC_URL` (bijvoorbeeld `https://picnic.boodschappenweek.nl`); zonder die
+  variabele toont de app de Picnic-knoppen niet.

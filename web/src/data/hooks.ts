@@ -13,6 +13,7 @@ import {
   type StoreItemRow,
   type StoreLabelRow,
   type WeekExtraRow,
+  type PicnicProductRow,
   type WeekDayRow,
   type WeekmenuDayRow,
   type WeekmenuRow,
@@ -81,6 +82,16 @@ export function useGeneralItems() {
   return useQuery<GeneralItemRow>(
     `SELECT id, name, is_pantry, label_id FROM general_items
      WHERE household_id = ? AND deleted_at IS NULL ORDER BY name COLLATE NOCASE`,
+    [hid],
+  )
+}
+
+/** Gekozen Picnic-producten van de planning. */
+export function usePicnicProducts() {
+  const hid = useHid()
+  return useQuery<PicnicProductRow>(
+    `SELECT id, ref_type, ref_key, product_id, product_name, unit_quantity, image_url, price_cents
+       FROM picnic_products WHERE household_id = ? AND deleted_at IS NULL`,
     [hid],
   )
 }

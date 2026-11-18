@@ -63,6 +63,18 @@ export const AppSchema = new Schema({
     label_id: column.text,
   }),
 
+  // Welk Picnic-product bij een artikel hoort (één keer kiezen, daarna onthouden).
+  picnic_products: new Table({
+    ...common,
+    ref_type: column.text,
+    ref_key: column.text,
+    product_id: column.text,
+    product_name: column.text,
+    unit_quantity: column.text,
+    image_url: column.text,
+    price_cents: column.integer,
+  }),
+
   // Losse Picnic-boodschappen voor één week.
   week_extras: new Table(
     {

@@ -2,9 +2,9 @@ import { PicnicError } from '../src/errors.js'
 import type { CartSummary, PicnicApi, PicnicApiFactory, ProductHit } from '../src/picnic.js'
 
 export const CATALOG: ProductHit[] = [
-  { id: 's1001', name: 'Uien', brand: null, unitQuantity: '1 kg', priceCents: 129, unavailable: false },
-  { id: 's1002', name: 'Halfvolle melk', brand: 'Campina', unitQuantity: '1,5 liter', priceCents: 189, unavailable: false },
-  { id: 's1003', name: 'Gehakt', brand: null, unitQuantity: '500 gram', priceCents: 349, unavailable: false },
+  { id: 's1001', name: 'Uien', brand: null, unitQuantity: '1 kg', priceCents: 129, unavailable: false, imageUrl: null },
+  { id: 's1002', name: 'Halfvolle melk', brand: 'Campina', unitQuantity: '1,5 liter', priceCents: 189, unavailable: false, imageUrl: null },
+  { id: 's1003', name: 'Gehakt', brand: null, unitQuantity: '500 gram', priceCents: 349, unavailable: false, imageUrl: null },
 ]
 
 /**

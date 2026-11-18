@@ -29,5 +29,11 @@ databasetest `supabase/tests/migrations.test.mjs` (28 controles, echte Postgres-
 ## Picnic
 
 - **Versie 1** (klaar): de boodschappenlijst kopiëren of delen (`ShoppingPage.tsx`, knop "Kopieer of deel lijst").
-- **Versie 2** (server klaar, scherm nog niet): `picnic-server/` voor de Google Cloud VM. Zie
-  `picnic-server/README.md`. Gebruikt de onofficiële `picnic-api`, die kan breken als Picnic iets verandert.
+- **Versie 2** (klaar, nog niet live): `picnic-server/` voor de Google Cloud VM, en in de app *Picnic koppelen*
+  (`pages/PicnicPage.tsx`), per artikel een gekozen Picnic-product dat onthouden wordt (tabel `picnic_products`,
+  `components/picnic/ProductSearchDialog.tsx`) en *Naar Picnic* met voorgestelde aantallen
+  (`components/picnic/PicnicOrderDialog.tsx`, `domain/picnic.ts`: verpakking lezen, naar boven afronden).
+  Getest: domein (verpakkingen en aantallen), SQL (toegang, grenzen), server (51 tests, ook planning per
+  verzoek) en de browser tegen de echte server met een nep-Picnic (koppelen met sms-code, zoeken, kiezen,
+  aantal aanpassen, in het mandje, regel afgevinkt). Gebruikt de onofficiële `picnic-api`, die kan breken
+  als Picnic iets verandert. **Niet getest tegen het echte Picnic.**
