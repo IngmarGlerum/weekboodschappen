@@ -12,6 +12,8 @@
 #   SUPABASE_DB_URL        verbindingsregel (Session pooler) met databasewachtwoord
 #   POWERSYNC_AUTH_TOKEN   PowerSync personal access token
 #   POWERSYNC_INSTANCE_ID  id van de PowerSync-instance
+#   POWERSYNC_PROJECT_ID   id van het PowerSync-project  (beide uit de adresbalk van het
+#   POWERSYNC_ORG_ID       id van de PowerSync-organisatie  dashboard; aanbevolen)
 
 name: Database en sync-regels
 
@@ -78,21 +80,48 @@ jobs:
     # Wacht op goedkeuring als het environment "Required reviewers" heeft.
     environment: production
     env:
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      PS_ADMIN_TOKEN: ${{ secrets.POWERSYNC_AUTH_TOKEN }}
-      INSTANCE_ID: ${{ secrets.POWERSYNC_INSTANCE_ID }}
+      # De ruwe secrets; de eerste stap schoont ze op en zet ze onder de namen die de
+      # CLI's verwachten (SUPABASE_DB_URL, PS_ADMIN_TOKEN, INSTANCE_ID, PROJECT_ID, ORG_ID).
+      RAW_SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      RAW_PS_ADMIN_TOKEN: ${{ secrets.POWERSYNC_AUTH_TOKEN }}
+      RAW_INSTANCE_ID: ${{ secrets.POWERSYNC_INSTANCE_ID }}
+      # Met project en organisatie erbij hoeft de CLI de instance niet eerst op te zoeken.
+      RAW_PROJECT_ID: ${{ secrets.POWERSYNC_PROJECT_ID }}
+      RAW_ORG_ID: ${{ secrets.POWERSYNC_ORG_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Secrets aanwezig?
+      - name: Secrets aanwezig en opgeschoond?
         run: |
           missing=0
-          for name in SUPABASE_DB_URL PS_ADMIN_TOKEN INSTANCE_ID; do
-            if [ -z "${!name}" ]; then echo "::error::Secret voor $name ontbreekt in het environment 'production'."; missing=1; fi
+          for name in SUPABASE_DB_URL PS_ADMIN_TOKEN INSTANCE_ID PROJECT_ID ORG_ID; do
+            raw="RAW_$name"
+            value="${!raw}"
+            # Spaties en nieuwe regels aan begin en eind (bij het plakken meegekomen) weghalen.
+            trimmed="$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            if [ "$trimmed" != "$value" ]; then echo "::warning::Secret voor $name had spaties of een nieuwe regel aan het begin of eind; die zijn weggehaald."; fi
+            [ -n "$trimmed" ] && echo "::add-mask::$trimmed"
+            {
+              echo "$name<<__EINDE__"
+              echo "$trimmed"
+              echo "__EINDE__"
+            } >> "$GITHUB_ENV"
+            if [ -z "$trimmed" ] && [ "$name" != "PROJECT_ID" ] && [ "$name" != "ORG_ID" ]; then
+              echo "::error::Secret voor $name ontbreekt in het environment 'production'."; missing=1
+            fi
           done
           exit $missing
+
+      - name: Verbinding met de database
+        run: |
+          if ! out=$(psql "$SUPABASE_DB_URL" -tAc "select 1" 2>&1); then
+            echo "::error::Kan niet verbinden met de database. Controleer SUPABASE_DB_URL: de regel van 'Session pooler', gebruiker postgres.<project-id>, het databasewachtwoord zonder haken, eindigend op /postgres."
+            echo "$out" | sed -E 's#postgresql://[^ ]*#postgresql://***#g'
+            exit 1
+          fi
+          echo "Verbinding gelukt."
 
       - uses: supabase/setup-cli@v1
         with:
