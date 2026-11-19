@@ -4,6 +4,7 @@ import { LuApple, LuBookmark, LuCheck, LuChevronDown, LuLogOut, LuPlus, LuSettin
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { useHousehold } from '../auth/HouseholdProvider'
+import { APP_VERSION } from '../lib/appVersion'
 import { HouseholdAvatar } from './HouseholdAvatar'
 import { NewHouseholdDialog } from './NewHouseholdDialog'
 
@@ -144,6 +145,9 @@ export function SettingsDrawer({ open, onClose }: Props) {
               <Drawer.Footer flexDirection="column" alignItems="stretch" gap="2">
                 <Text color="fg.muted" fontSize="sm" truncate>
                   {online ? `Ingelogd als ${user?.email ?? ''}` : 'Alleen op dit apparaat'}
+                </Text>
+                <Text color="fg.subtle" fontSize="xs">
+                  Versie {APP_VERSION}
                 </Text>
                 {online && (
                   <HStack>
