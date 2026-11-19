@@ -7,6 +7,7 @@ import App from './App'
 import { AuthProvider } from './auth/AuthProvider'
 import { HouseholdProvider } from './auth/HouseholdProvider'
 import { Toaster } from './components/toaster'
+import { UpdateBanner } from './components/UpdateBanner'
 import { PowerSyncProvider } from './powersync/PowerSyncProvider'
 
 // Requirement 11: de service worker zorgt dat de app ook zonder verbinding opent.
@@ -25,6 +26,7 @@ createRoot(document.getElementById('root')!).render(
         </HouseholdProvider>
       </AuthProvider>
       <Toaster />
+      <UpdateBanner />
     </ChakraProvider>
   </StrictMode>,
 )

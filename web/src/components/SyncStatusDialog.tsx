@@ -1,12 +1,13 @@
 import { Badge, Button, DataList, Stack, Text } from '@chakra-ui/react'
 import { useStatus } from '@powersync/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { env } from '../lib/env'
 import { supabase } from '../lib/supabase'
 import { SupabaseConnector } from '../powersync/connector'
 import { db } from '../powersync/db'
-import { AppDialog } from './ConfirmDialog'
+import { APP_VERSION, hardReload } from '../lib/appVersion'
+import { AppDialog, ConfirmDialog } from './ConfirmDialog'
 
 function hostOf(url: string | undefined) {
   try {
@@ -25,11 +26,39 @@ export function SyncBadge() {
   const status = useStatus()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [pendingUploads, setPendingUploads] = useState<number | null>(null)
+  // Sinds wanneer de app (zonder succes) probeert te verbinden.
+  const [notConnectedSince, setNotConnectedSince] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (status.connected) setNotConnectedSince(null)
+    else setNotConnectedSince((since) => since ?? Date.now())
+  }, [status.connected])
+
+  // Elke 5 seconden opnieuw kijken, zodat "vastgelopen" vanzelf verschijnt.
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setInterval(() => setNow(Date.now()), 5000)
+    return () => window.clearInterval(timer)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    void db
+      .getUploadQueueStats()
+      .then((stats) => setPendingUploads(stats.count))
+      .catch(() => setPendingUploads(null))
+  }, [open, status.dataFlowStatus.uploading])
 
   if (mode === 'local') return <Badge colorPalette="gray">Alleen dit apparaat</Badge>
 
   const flow = status.dataFlowStatus
   const error = flow.downloadError ?? flow.uploadError
+  const online = typeof navigator === 'undefined' || navigator.onLine
+  // Online, al 20 seconden niet verbonden: waarschijnlijk vastgelopen (oude kopie van de app).
+  const stuck = online && notConnectedSince !== null && now - notConnectedSince > 20_000
   const badge = flow.uploading ? (
     <Badge colorPalette="blue">Verzenden…</Badge>
   ) : status.connected ? (
@@ -104,13 +133,68 @@ export function SyncBadge() {
               </Text>
             </Stack>
           )}
-          {!error && !status.connected && (
+          {!error && !status.connected && !stuck && (
             <Text color="fg.muted" fontSize="sm">
               Geen foutmelding. Ben je online? Dan probeert de app het vanzelf opnieuw.
             </Text>
           )}
+
+          {(stuck || error) && (
+            <Stack gap="2" borderTopWidth="1px" pt="3">
+              <Text fontWeight="semibold">Lukt het niet?</Text>
+              <Text fontSize="sm" color="fg.muted">
+                Herlaad de app. Dat haalt de nieuwste versie op en start de synchronisatie opnieuw. Je gegevens
+                blijven staan.
+              </Text>
+              <Button
+                colorPalette="green"
+                alignSelf="flex-start"
+                loading={busy}
+                onClick={() => {
+                  setBusy(true)
+                  void db.disconnect().finally(() => void hardReload())
+                }}
+              >
+                App herladen
+              </Button>
+              <Text fontSize="sm" color="fg.muted">
+                Helpt dat niet? Wis de gegevens op dit apparaat; de app haalt alles daarna opnieuw op.
+              </Text>
+              <Button
+                variant="outline"
+                colorPalette="red"
+                size="sm"
+                alignSelf="flex-start"
+                onClick={() => setConfirmReset(true)}
+              >
+                Gegevens op dit apparaat wissen
+              </Button>
+            </Stack>
+          )}
+
+          <Text fontSize="xs" color="fg.subtle">
+            Versie {APP_VERSION}
+            {pendingUploads ? ` · ${pendingUploads} wijziging(en) nog niet verzonden` : ''}
+          </Text>
         </Stack>
       </AppDialog>
+      <ConfirmDialog
+        open={confirmReset}
+        title="Gegevens op dit apparaat wissen?"
+        message={
+          pendingUploads
+            ? `Er ${pendingUploads === 1 ? 'is 1 wijziging' : `zijn ${pendingUploads} wijzigingen`} op dit apparaat nog niet verzonden. Die gaan verloren. De rest staat veilig online en komt terug.`
+            : 'Alle gegevens staan online en worden daarna opnieuw opgehaald. Je blijft ingelogd.'
+        }
+        confirmLabel="Wissen en opnieuw ophalen"
+        destructive
+        onCancel={() => setConfirmReset(false)}
+        onConfirm={() => {
+          setConfirmReset(false)
+          setBusy(true)
+          void db.disconnectAndClear().finally(() => void hardReload())
+        }}
+      />
     </>
   )
 }
