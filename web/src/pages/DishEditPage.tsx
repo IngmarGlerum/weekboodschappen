@@ -5,8 +5,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useCurrentHousehold } from '../auth/HouseholdProvider'
 import { AppDialog, ConfirmDialog } from '../components/ConfirmDialog'
 import { IngredientPicker } from '../components/IngredientPicker'
+import { PicnicProductPicker } from '../components/picnic/PicnicProductPicker'
 import { notify } from '../components/toaster'
-import { useAllDishes, useDishIngredients, useIngredients } from '../data/hooks'
+import { useAllDishes, useDishIngredients, useIngredients, useStoreLabels } from '../data/hooks'
+import { normalizeName } from '../domain/shoppingList'
+import { LabelBadge } from '../components/list/LabelBadge'
 import { useRepo, type DishUsage } from '../data/repo'
 import { clearDishDraft, readDishDraft, writeDishDraft } from '../lib/dishDraft'
 import { describeError } from '../lib/errors'
@@ -39,6 +42,7 @@ export default function DishEditPage() {
   const repo = useRepo()
   const navigate = useNavigate()
   const ingredients = useIngredients()
+  const labels = useStoreLabels()
   const allDishes = useAllDishes()
   const existingLines = useDishIngredients(dishId)
 
@@ -265,6 +269,21 @@ export default function DishEditPage() {
                     />
                   </Flex>
                 )}
+                {line.ingredientId &&
+                  (() => {
+                    const ingredient = ingredients.data.find((i) => i.id === line.ingredientId)
+                    if (!ingredient) return null
+                    // Een ingrediënt van een andere winkel heeft geen Picnic-product; toon die winkel.
+                    const store = ingredient.label_id ? labels.data.find((l) => l.id === ingredient.label_id) : undefined
+                    if (store) return <Box><LabelBadge label={store} /></Box>
+                    return (
+                      <PicnicProductPicker
+                        refType="ingredient"
+                        refKey={normalizeName(ingredient.name)}
+                        articleName={ingredient.name}
+                      />
+                    )
+                  })()}
               </Stack>
             </Box>
           )
