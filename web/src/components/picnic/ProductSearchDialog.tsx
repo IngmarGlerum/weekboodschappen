@@ -1,8 +1,9 @@
-import { Box, Button, HStack, Input, Spinner, Stack, Text } from '@chakra-ui/react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Box, Button, HStack, Input, InputGroup, Spinner, Stack, Text } from '@chakra-ui/react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { LuSearch } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import { useCurrentHousehold } from '../../auth/HouseholdProvider'
-import { formatPrice } from '../../domain/picnic'
+import { formatPrice, searchTermFor } from '../../domain/picnic'
 import { picnicApi, PicnicApiError, type PicnicProduct } from '../../lib/picnicApi'
 import { AppDialog } from '../ConfirmDialog'
 import { ProductThumb } from './ProductThumb'
@@ -15,11 +16,15 @@ interface Props {
   onChoose: (product: PicnicProduct) => void
 }
 
+/** Wachttijd na de laatste toetsaanslag voordat er gezocht wordt. */
+const DEBOUNCE_MS = 350
+
 /** Een Picnic-product zoeken en kiezen voor een artikel. De keuze wordt onthouden. */
 export function ProductSearchDialog({ open, articleName, onClose, onChoose }: Props) {
   const household = useCurrentHousehold()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [searched, setSearched] = useState('')
   const [results, setResults] = useState<PicnicProduct[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
@@ -33,7 +38,10 @@ export function ProductSearchDialog({ open, articleName, onClose, onChoose }: Pr
     setError(null)
     try {
       const products = await picnicApi.search(household.id, q)
-      if (mine === seq.current) setResults(products)
+      if (mine === seq.current) {
+        setResults(products)
+        setSearched(q)
+      }
     } catch (e) {
       if (mine === seq.current) {
         setResults(null)
@@ -44,17 +52,33 @@ export function ProductSearchDialog({ open, articleName, onClose, onChoose }: Pr
     }
   }
 
-  // Bij openen meteen zoeken op de naam van het artikel.
+  // Bij openen meteen zoeken op de naam van het artikel (zonder hoeveelheden).
   useEffect(() => {
     if (!open || !articleName) return
-    setQuery(articleName)
+    const term = searchTermFor(articleName)
+    setQuery(term)
     setResults(null)
-    void search(articleName)
+    setError(null)
+    void search(term)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, articleName])
 
-  function submit(e: FormEvent) {
+  // Live zoeken: kort na het typen, vanaf 2 tekens.
+  useEffect(() => {
+    if (!open) return
+    const q = query.trim()
+    if (q.length < 2 || q === searched) return
+    const timer = window.setTimeout(() => void search(q), DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, open])
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return
+    // Geen formulier versturen: dit venster staat soms "in" het formulier van een gerecht,
+    // en Enter mag dat gerecht niet opslaan. Enter zoekt alleen meteen.
     e.preventDefault()
+    e.stopPropagation()
     void search(query)
   }
 
@@ -72,20 +96,17 @@ export function ProductSearchDialog({ open, articleName, onClose, onChoose }: Pr
       }
     >
       <Stack gap="3">
-        <form onSubmit={submit}>
-          <HStack gap="2">
-            <Input
-              aria-label="Zoek bij Picnic"
-              placeholder="Zoek bij Picnic"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              enterKeyHint="search"
-            />
-            <Button type="submit" colorPalette="green" disabled={!query.trim()} loading={busy}>
-              Zoek
-            </Button>
-          </HStack>
-        </form>
+        <InputGroup startElement={busy ? <Spinner size="xs" /> : <LuSearch />}>
+          <Input
+            aria-label="Zoek bij Picnic"
+            placeholder="Zoek bij Picnic"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onKeyDown}
+            enterKeyHint="search"
+            autoComplete="off"
+          />
+        </InputGroup>
 
         {error && (
           <Stack gap="2">
@@ -109,13 +130,23 @@ export function ProductSearchDialog({ open, articleName, onClose, onChoose }: Pr
         )}
 
         {busy && !results && <Spinner alignSelf="center" />}
-        {results && results.length === 0 && <Text color="fg.muted">Niets gevonden. Probeer een ander woord.</Text>}
+        {results && results.length === 0 && !busy && (
+          <Text color="fg.muted">Niets gevonden voor “{searched}”. Probeer een korter of ander woord.</Text>
+        )}
 
         {results && results.length > 0 && (
           <Stack gap="1" role="listbox" aria-label="Producten van Picnic">
             {results.map((p) => (
               <Box key={p.id} asChild textAlign="left" rounded="md" px="2" py="1.5" _hover={{ bg: 'bg.muted' }} opacity={p.unavailable ? 0.5 : 1}>
-                <button type="button" role="option" aria-selected={false} onClick={() => onChoose(p)}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onChoose(p)
+                  }}
+                >
                   <HStack gap="3">
                     <ProductThumb url={p.imageUrl} size={44} />
                     <Box flex="1" minW="0">
