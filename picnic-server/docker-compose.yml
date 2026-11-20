@@ -1,5 +1,5 @@
 # Draait op de Google Cloud VM: de Picnic-server met Caddy ervoor voor HTTPS.
-# Gebruik:  cp .env.example .env  (invullen)  en  DOMAIN=picnic.jouwdomein.nl docker compose up -d --build
+# Gebruik:  cp .env.example .env  (invullen, ook DOMAIN)  en  docker compose up -d --build
 services:
   picnic:
     build: .

@@ -22,6 +22,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error('PICNIC_ENCRYPTION_KEY moet 32 bytes in base64 zijn (openssl rand -base64 32).')
   }
 
+  // Een tikfout in het adres (bijvoorbeeld "https:https://…") gaf eerder pas later
+  // "sessie ongeldig". Liever meteen stoppen met een duidelijke melding.
+  const supabaseUrl = (env.SUPABASE_URL as string).trim().replace(/\/+$/, '')
+  let parsed: URL | null = null
+  try {
+    parsed = new URL(supabaseUrl)
+  } catch {
+    parsed = null
+  }
+  if (!parsed || parsed.protocol !== 'https:' || parsed.pathname !== '/' || parsed.search || !parsed.hostname.includes('.') || supabaseUrl !== parsed.origin) {
+    throw new Error(`SUPABASE_URL is geen geldig adres: "${supabaseUrl}". Verwacht iets als https://<project>.supabase.co`)
+  }
+
   const country = (env.PICNIC_COUNTRY ?? 'NL').toUpperCase()
   if (country !== 'NL' && country !== 'DE' && country !== 'FR') {
     throw new Error('PICNIC_COUNTRY moet NL, DE of FR zijn.')
@@ -29,7 +42,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     port: Number(env.PORT ?? 8787),
-    supabaseUrl: (env.SUPABASE_URL as string).replace(/\/+$/, ''),
+    supabaseUrl,
     supabaseAnonKey: env.SUPABASE_ANON_KEY as string,
     supabaseJwtSecret: env.SUPABASE_JWT_SECRET || undefined,
     encryptionKey,

@@ -53,9 +53,20 @@ Beperking: past iemand tussen twee pogingen zelf het mandje aan in de Picnic-app
 1. Een kleine Linux-VM met Docker, en een domeinnaam die naar het IP van de VM wijst
    (poort 80 en 443 open in de firewall van Google Cloud).
 2. `cp .env.example .env` en invullen (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PICNIC_ENCRYPTION_KEY`,
-   `ALLOWED_ORIGINS` met het adres van de web-app).
-3. `DOMAIN=picnic.jouwdomein.nl docker compose up -d --build`. Caddy regelt het HTTPS-certificaat.
+   `ALLOWED_ORIGINS` met het adres van de web-app, en `DOMAIN`). Docker Compose leest `DOMAIN` uit hetzelfde
+   bestand, dus elke `docker compose`-opdracht werkt daarna zonder iets ervoor te typen.
+3. `docker compose up -d --build`. Caddy regelt het HTTPS-certificaat.
 4. Controleer: `curl https://picnic.jouwdomein.nl/health`.
+
+Bijwerken naar een nieuwe versie (code opnieuw ophalen, `.env` blijft staan):
+
+```bash
+cd ~/weekboodschappen && curl -L https://github.com/IngmarGlerum/weekboodschappen/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 --exclude='*/picnic-server/.env'
+cd picnic-server && docker compose up -d --build
+```
+
+Na een wijziging in `.env`: `docker compose up -d --force-recreate picnic`. Een fout `SUPABASE_URL` laat de
+server nu meteen stoppen met een duidelijke melding (`docker compose logs picnic`).
 
 Zonder Docker: `npm ci && npm run build && npm start` (Node 22.13 of nieuwer; de opslag gebruikt de
 ingebouwde `node:sqlite`, dus er hoeft niets gecompileerd te worden).
