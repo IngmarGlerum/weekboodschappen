@@ -101,3 +101,17 @@ export function formatPrice(cents: number | null | undefined): string {
   if (cents === null || cents === undefined) return ''
   return `€ ${(cents / 100).toFixed(2).replace('.', ',')}`
 }
+
+/**
+ * Een zoekterm die Picnic begrijpt: hoeveelheden en eenheden uit onze eigen naam
+ * ("Wokgroenten 600gr", "2 x 250 g", "1,5 liter") helpen niet bij Picnic en geven vaak
+ * niets. Die halen we eruit voor de eerste zoekopdracht.
+ */
+export function searchTermFor(name: string): string {
+  const cleaned = name
+    .replace(/\b\d+([.,]\d+)?\s*x\s*\d+([.,]\d+)?\s*[a-z]*\b/gi, ' ')
+    .replace(/\b\d+([.,]\d+)?\s*(mg|g|gr|gram|kg|kilo|ml|cl|dl|l|ltr|liter|st|stuk|stuks)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned || name.trim()
+}

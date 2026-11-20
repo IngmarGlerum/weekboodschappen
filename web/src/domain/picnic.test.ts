@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatPrice, parseUnitQuantity, productRef, suggestCount } from './picnic'
+import { formatPrice, parseUnitQuantity, productRef, searchTermFor, suggestCount } from './picnic'
 
 describe('verpakking lezen', () => {
   it.each([
@@ -61,4 +61,18 @@ describe('sleutel van een artikel', () => {
 it('prijs', () => {
   expect(formatPrice(129)).toBe('€ 1,29')
   expect(formatPrice(null)).toBe('')
+})
+
+describe('zoekterm voor Picnic', () => {
+  it.each([
+    ['Wokgroenten 600gr', 'Wokgroenten'],
+    ['Halfvolle melk 1,5 liter', 'Halfvolle melk'],
+    ['Cola 6 x 330 ml', 'Cola'],
+    ['Eieren 10 stuks', 'Eieren'],
+    ['uien', 'uien'],
+    ['7up', '7up'],
+    ['500 g', '500 g'],
+  ])('%s → %s', (name, term) => {
+    expect(searchTermFor(name)).toBe(term)
+  })
 })
